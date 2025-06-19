@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { toolDefinitions } from '../src/toolDefinitions.js';
 
 describe('Tool Definitions', () => {
-  it('should export exactly 5 tools', () => {
-    expect(toolDefinitions).toHaveLength(5);
+  it('should export exactly 6 tools', () => {
+    expect(toolDefinitions).toHaveLength(6);
   });
 
   it('should have all required tool names', () => {
@@ -13,6 +13,7 @@ describe('Tool Definitions', () => {
     expect(toolNames).toContain('read-note');
     expect(toolNames).toContain('write-note');
     expect(toolNames).toContain('delete-note');
+    expect(toolNames).toContain('search-by-tags');
   });
 
   it('should have valid schemas for all tools', () => {
@@ -40,5 +41,8 @@ describe('Tool Definitions', () => {
 
     const listTool = toolDefinitions.find(t => t.name === 'list-notes');
     expect(listTool.inputSchema.required).toBeUndefined();
+
+    const tagSearchTool = toolDefinitions.find(t => t.name === 'search-by-tags');
+    expect(tagSearchTool.inputSchema.required).toEqual(['tags']);
   });
 });

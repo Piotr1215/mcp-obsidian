@@ -20,6 +20,7 @@ This server instead works directly with Obsidian vault files on disk, making it 
 - No dependency on running Obsidian instance
 - Compatible with obsidian.nvim workflows
 - Search, read, write, and manage notes via MCP
+- Search notes by tags (supports both frontmatter and inline tags)
 
 ## Installation
 

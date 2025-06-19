@@ -3,7 +3,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { searchVault, listNotes, readNote, writeNote, deleteNote } from './tools.js';
+import { searchVault, listNotes, readNote, writeNote, deleteNote, searchByTags } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 
 export function createServer(vaultPath) {
@@ -94,6 +94,20 @@ export function createServer(vaultPath) {
             {
               type: 'text',
               text: `Note deleted successfully: ${notePath}`
+            }
+          ]
+        };
+      }
+
+      case 'search-by-tags': {
+        const { tags, directory, caseSensitive = false } = args;
+        const result = await searchByTags(vaultPath, tags, directory, caseSensitive);
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
             }
           ]
         };

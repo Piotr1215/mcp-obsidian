@@ -7,10 +7,11 @@ vi.mock('../src/tools.js', () => ({
   listNotes: vi.fn(),
   readNote: vi.fn(),
   writeNote: vi.fn(),
-  deleteNote: vi.fn()
+  deleteNote: vi.fn(),
+  searchByTags: vi.fn()
 }));
 
-import { searchVault, listNotes, readNote, writeNote, deleteNote } from '../src/tools.js';
+import { searchVault, listNotes, readNote, writeNote, deleteNote, searchByTags } from '../src/tools.js';
 
 describe('Server Handlers', () => {
   let server;
@@ -84,6 +85,15 @@ describe('Server Handlers', () => {
       const result = await deleteNote(mockVaultPath, 'test.md');
       expect(result).toEqual('test.md');
       expect(deleteNote).toHaveBeenCalledWith(mockVaultPath, 'test.md');
+    });
+
+    it('should call searchByTags when search-by-tags tool is used', async () => {
+      const mockResult = { notes: [{ path: 'note1.md', tags: ['tag1'] }], count: 1 };
+      searchByTags.mockResolvedValue(mockResult);
+      
+      const result = await searchByTags(mockVaultPath, ['tag1'], null, false);
+      expect(result).toEqual(mockResult);
+      expect(searchByTags).toHaveBeenCalledWith(mockVaultPath, ['tag1'], null, false);
     });
   });
 });

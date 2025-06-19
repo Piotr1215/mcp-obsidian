@@ -80,4 +80,29 @@ export const toolDefinitions = [
       required: ['path'],
     },
   },
+  {
+    name: 'search-by-tags',
+    description: 'Search for notes by tags (supports both frontmatter and inline tags)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tags: {
+          type: 'array',
+          items: {
+            type: 'string',
+          },
+          description: 'Tags to search for (AND operation - notes must have all specified tags)',
+        },
+        directory: {
+          type: 'string',
+          description: 'Directory path relative to vault root (optional)',
+        },
+        caseSensitive: {
+          type: 'boolean',
+          description: 'Case sensitive tag matching (default: false)',
+        },
+      },
+      required: ['tags'],
+    },
+  },
 ];
