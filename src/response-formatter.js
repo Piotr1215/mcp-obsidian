@@ -5,10 +5,11 @@
 /**
  * Creates a text response
  * @param {string} text - The text content
+ * @param {object} [metadata] - Optional execution metadata
  * @returns {object} MCP-compliant response
  */
-export function textResponse(text) {
-  return {
+export function textResponse(text, metadata = null) {
+  const response = {
     content: [
       {
         type: 'text',
@@ -16,15 +17,22 @@ export function textResponse(text) {
       }
     ]
   };
+  
+  if (metadata) {
+    response._meta = metadata;
+  }
+  
+  return response;
 }
 
 /**
  * Creates a structured response with both text and structured content
  * @param {object} data - The structured data
  * @param {string} [description] - Optional text description
+ * @param {object} [metadata] - Optional execution metadata
  * @returns {object} MCP-compliant response
  */
-export function structuredResponse(data, description = null) {
+export function structuredResponse(data, description = null, metadata = null) {
   const response = {
     content: [
       {
@@ -34,6 +42,10 @@ export function structuredResponse(data, description = null) {
     ],
     structuredContent: data
   };
+  
+  if (metadata) {
+    response._meta = metadata;
+  }
   
   return response;
 }
@@ -80,9 +92,10 @@ export function resourceLink(uri, name, description, mimeType) {
  * Creates a response with multiple content items
  * @param {Array} items - Array of content items
  * @param {object} [structuredContent] - Optional structured content
+ * @param {object} [metadata] - Optional execution metadata
  * @returns {object} MCP-compliant response
  */
-export function multiContentResponse(items, structuredContent = null) {
+export function multiContentResponse(items, structuredContent = null, metadata = null) {
   const response = {
     content: items
   };
@@ -91,5 +104,23 @@ export function multiContentResponse(items, structuredContent = null) {
     response.structuredContent = structuredContent;
   }
   
+  if (metadata) {
+    response._meta = metadata;
+  }
+  
   return response;
+}
+
+/**
+ * Creates execution metadata for responses
+ * @param {number} startTime - The start time from Date.now()
+ * @param {object} [additional] - Additional metadata fields
+ * @returns {object} Metadata object
+ */
+export function createMetadata(startTime, additional = {}) {
+  return {
+    executionTime: Date.now() - startTime,
+    timestamp: new Date().toISOString(),
+    ...additional
+  };
 }

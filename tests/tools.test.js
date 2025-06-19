@@ -5,7 +5,7 @@ import { searchVault, listNotes, readNote, writeNote, deleteNote } from '../src/
 vi.mock('fs/promises');
 vi.mock('glob');
 
-import { readFile, writeFile, mkdir, unlink } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink, access, stat } from 'fs/promises';
 import { glob } from 'glob';
 
 describe('Tools module', () => {
@@ -23,6 +23,8 @@ describe('Tools module', () => {
       ];
       
       glob.mockResolvedValue(mockFiles);
+      // Mock file sizes to be within limit
+      stat.mockResolvedValue({ size: 1024 }); // 1KB
       readFile
         .mockResolvedValueOnce('Line 1\nThis contains TEST\nLine 3')
         .mockResolvedValueOnce('Another file\nWith TEST here\nAnd TEST again');
@@ -43,6 +45,7 @@ describe('Tools module', () => {
     it('should handle case-sensitive search', async () => {
       const mockFiles = ['/test/vault/note.md'];
       glob.mockResolvedValue(mockFiles);
+      stat.mockResolvedValue({ size: 1024 }); // 1KB
       readFile.mockResolvedValue('test\nTest\nTEST');
 
       const result = await searchVault(mockVaultPath, 'Test', null, true);
@@ -61,6 +64,7 @@ describe('Tools module', () => {
 
     it('should handle empty results', async () => {
       glob.mockResolvedValue(['/test/vault/note.md']);
+      stat.mockResolvedValue({ size: 1024 }); // 1KB
       readFile.mockResolvedValue('No matches here');
 
       const result = await searchVault(mockVaultPath, 'notfound', null, false);
@@ -71,10 +75,14 @@ describe('Tools module', () => {
 
     it('should handle file read errors', async () => {
       glob.mockResolvedValue(['/test/vault/note.md']);
-      readFile.mockRejectedValue(new Error('Permission denied'));
+      // File is skipped if too large, so it won't cause error
+      stat.mockRejectedValue(new Error('File too large'));
 
-      await expect(searchVault(mockVaultPath, 'test', null, false))
-        .rejects.toThrow('Permission denied');
+      const result = await searchVault(mockVaultPath, 'test', null, false);
+      
+      // Should return empty results since file was skipped
+      expect(result.count).toBe(0);
+      expect(result.results).toHaveLength(0);
     });
   });
 
@@ -133,6 +141,8 @@ describe('Tools module', () => {
   describe('readNote', () => {
     it('should read note content', async () => {
       const noteContent = '# Test Note\n\nThis is the content';
+      access.mockResolvedValue();
+      stat.mockResolvedValue({ size: 1024 }); // 1KB
       readFile.mockResolvedValue(noteContent);
 
       const result = await readNote(mockVaultPath, 'test.md');
@@ -142,6 +152,8 @@ describe('Tools module', () => {
     });
 
     it('should handle nested paths', async () => {
+      access.mockResolvedValue();
+      stat.mockResolvedValue({ size: 1024 }); // 1KB
       readFile.mockResolvedValue('Content');
 
       await readNote(mockVaultPath, 'folder/subfolder/note.md');
@@ -153,10 +165,12 @@ describe('Tools module', () => {
     });
 
     it('should propagate read errors', async () => {
+      access.mockResolvedValue();
+      stat.mockResolvedValue({ size: 1024 }); // 1KB
       readFile.mockRejectedValue(new Error('File not found'));
 
       await expect(readNote(mockVaultPath, 'missing.md'))
-        .rejects.toThrow('File not found');
+        .rejects.toThrow('Failed to read note');
     });
   });
 
@@ -207,6 +221,7 @@ describe('Tools module', () => {
 
   describe('deleteNote', () => {
     it('should delete note', async () => {
+      access.mockResolvedValue();
       unlink.mockResolvedValue();
 
       const result = await deleteNote(mockVaultPath, 'delete-me.md');
@@ -216,6 +231,7 @@ describe('Tools module', () => {
     });
 
     it('should handle nested paths', async () => {
+      access.mockResolvedValue();
       unlink.mockResolvedValue();
 
       await deleteNote(mockVaultPath, 'folder/note.md');

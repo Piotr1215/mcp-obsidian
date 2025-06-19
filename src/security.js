@@ -1,5 +1,16 @@
 import path from 'path';
-import { Errors } from './errors.js';
+import { stat } from 'fs/promises';
+import { Errors, MCPError } from './errors.js';
+import { config } from './config.js';
+import { formatFileSize } from './validation.js';
+
+// Re-export validation functions that throw errors for backward compatibility
+import {
+  validatePathWithinBase,
+  validateMarkdownExtension,
+  validateRequiredParameters,
+  sanitizeContent as sanitizeContentPure
+} from './validation.js';
 
 /**
  * Validates that a path is within the allowed vault directory
@@ -9,34 +20,14 @@ import { Errors } from './errors.js';
  * @throws {MCPError} If the path is outside the vault
  */
 export function validatePath(vaultPath, targetPath) {
-  // Reject absolute paths that don't start with the vault path
-  if (path.isAbsolute(targetPath) && !targetPath.startsWith(vaultPath)) {
-    throw Errors.accessDenied(
-      'Path traversal attempt detected',
-      { 
-        path: targetPath,
-        reason: 'Absolute path outside vault directory'
-      }
-    );
+  const result = validatePathWithinBase(vaultPath, targetPath);
+  if (!result.valid) {
+    throw Errors.accessDenied('Path traversal attempt detected', {
+      path: targetPath,
+      reason: result.error
+    });
   }
-  
-  // Normalize paths to prevent traversal attacks
-  const normalizedVault = path.resolve(vaultPath);
-  const normalizedTarget = path.resolve(vaultPath, targetPath);
-  
-  // Check if the target path is within the vault
-  if (!normalizedTarget.startsWith(normalizedVault + path.sep) && 
-      normalizedTarget !== normalizedVault) {
-    throw Errors.accessDenied(
-      'Path traversal attempt detected',
-      { 
-        path: targetPath,
-        reason: 'Path is outside vault directory'
-      }
-    );
-  }
-  
-  return normalizedTarget;
+  return result.resolvedPath;
 }
 
 /**
@@ -45,11 +36,9 @@ export function validatePath(vaultPath, targetPath) {
  * @throws {MCPError} If the file is not a markdown file
  */
 export function validateMarkdownFile(filePath) {
-  if (!filePath.toLowerCase().endsWith('.md')) {
-    throw Errors.invalidParams(
-      'Only markdown files (.md) are supported',
-      { path: filePath }
-    );
+  const result = validateMarkdownExtension(filePath);
+  if (!result.valid) {
+    throw Errors.invalidParams(result.error, { path: filePath });
   }
 }
 
@@ -60,13 +49,9 @@ export function validateMarkdownFile(filePath) {
  * @throws {MCPError} If any required parameter is missing
  */
 export function validateRequiredParams(params, required) {
-  for (const param of required) {
-    if (params[param] === undefined || params[param] === null) {
-      throw Errors.invalidParams(
-        `Missing required parameter: ${param}`,
-        { missingParam: param }
-      );
-    }
+  const result = validateRequiredParameters(params, required);
+  if (!result.valid) {
+    throw Errors.invalidParams(result.error, { missingParam: result.missingParam });
   }
 }
 
@@ -76,6 +61,38 @@ export function validateRequiredParams(params, required) {
  * @returns {string} The sanitized content
  */
 export function sanitizeContent(content) {
-  // Remove any null bytes which could cause issues
-  return content.replace(/\0/g, '');
+  return sanitizeContentPure(content);
+}
+
+/**
+ * Validates file size is within acceptable limits
+ * @param {string} filePath - The file path to check
+ * @param {number} maxSize - Maximum allowed size in bytes
+ * @throws {MCPError} If the file is too large
+ */
+export async function validateFileSize(filePath, maxSize = config.limits.maxFileSize) {
+  try {
+    const stats = await stat(filePath);
+    
+    if (stats.size > maxSize) {
+      throw Errors.invalidParams(
+        `File too large: ${formatFileSize(stats.size)} exceeds maximum allowed size of ${formatFileSize(maxSize)}`,
+        { 
+          path: filePath,
+          size: stats.size,
+          maxSize: maxSize
+        }
+      );
+    }
+    
+    return stats.size;
+  } catch (error) {
+    if (error instanceof MCPError) {
+      throw error;
+    }
+    if (error.code === 'ENOENT') {
+      throw Errors.resourceNotFound(filePath, { path: filePath });
+    }
+    throw Errors.internalError(`Failed to check file size: ${error.message}`, { path: filePath });
+  }
 }

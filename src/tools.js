@@ -1,79 +1,140 @@
-import { readFile, writeFile, mkdir, unlink, access } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink, access, stat } from 'fs/promises';
 import { constants } from 'fs';
 import { glob } from 'glob';
 import path from 'path';
-import { Errors } from './errors.js';
-import { validatePath, validateMarkdownFile, validateRequiredParams, sanitizeContent } from './security.js';
+import { Errors, MCPError } from './errors.js';
+import { config } from './config.js';
 
+// Import pure functions
+import { findMatchesInContent, transformSearchResults, limitSearchResults } from './search.js';
+import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
+import { 
+  validatePathWithinBase, 
+  validateMarkdownExtension, 
+  validateRequiredParameters,
+  validateFileSize as validateFileSizePure,
+  sanitizeContent as sanitizeContentPure
+} from './validation.js';
+
+/**
+ * Wrapper to convert validation results to exceptions
+ */
+function assertValid(validationResult, errorFactory) {
+  if (!validationResult.valid) {
+    throw errorFactory(validationResult.error, validationResult);
+  }
+  return validationResult;
+}
+
+/**
+ * Search for content in vault (I/O function using pure functions)
+ */
 export async function searchVault(vaultPath, query, searchPath, caseSensitive = false) {
-  // Validate required parameters
-  validateRequiredParams({ query }, ['query']);
+  // Validate using pure function
+  const paramValidation = validateRequiredParameters({ query }, ['query']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
   
   // Validate search path if provided
   if (searchPath) {
-    validatePath(vaultPath, searchPath);
+    const pathValidation = validatePathWithinBase(vaultPath, searchPath);
+    assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: searchPath }));
   }
   
+  // I/O: Get files
   const searchPattern = searchPath 
     ? path.join(vaultPath, searchPath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
-  
   const files = await glob(searchPattern);
-  const results = [];
-
+  
+  // Process files with pure functions
+  const fileMatches = [];
+  const totalFiles = files.length;
+  
   for (const file of files) {
-    const content = await readFile(file, 'utf-8');
-    const lines = content.split('\n');
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const searchLine = caseSensitive ? line : line.toLowerCase();
-      const searchQuery = caseSensitive ? query : query.toLowerCase();
+    try {
+      // I/O: Check file size
+      const stats = await stat(file);
+      const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
       
-      if (searchLine.includes(searchQuery)) {
-        results.push({
-          file: path.relative(vaultPath, file),
-          line: i + 1,
-          content: line.trim()
-        });
+      if (!sizeValidation.valid) {
+        continue; // Skip large files
       }
+      
+      // I/O: Read file
+      const content = await readFile(file, 'utf-8');
+      
+      // Pure: Find matches
+      const matches = findMatchesInContent(content, query, caseSensitive);
+      
+      if (matches.length > 0) {
+        fileMatches.push({ file, matches });
+      }
+    } catch (error) {
+      // Skip files with read errors
+      continue;
     }
   }
-
-  return { results, count: results.length };
+  
+  // Pure: Transform and limit results
+  const results = transformSearchResults(fileMatches, vaultPath);
+  return limitSearchResults(results, config.limits.maxSearchResults);
 }
 
+/**
+ * List notes in vault (I/O function)
+ */
 export async function listNotes(vaultPath, directory) {
+  // Validate directory path if provided
+  if (directory) {
+    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
+  }
+  
   const searchPath = directory 
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
   
   const files = await glob(searchPath);
-  const notes = files.map(file => path.relative(vaultPath, file));
+  const notes = files.map(file => path.relative(vaultPath, file)).sort();
   
   return {
-    notes: notes.sort(),
+    notes,
     count: notes.length
   };
 }
 
+/**
+ * Read note content (I/O function with validation)
+ */
 export async function readNote(vaultPath, notePath) {
-  // Validate required parameters
-  validateRequiredParams({ path: notePath }, ['path']);
+  // Pure validations
+  const paramValidation = validateRequiredParameters({ path: notePath }, ['path']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
   
-  // Validate markdown file
-  validateMarkdownFile(notePath);
+  const extensionValidation = validateMarkdownExtension(notePath);
+  assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
   
-  // Validate and resolve the path
-  const fullPath = validatePath(vaultPath, notePath);
+  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
   
-  // Check if file exists
+  const fullPath = pathValidation.resolvedPath;
+  
+  // I/O: Check file exists and size
   try {
     await access(fullPath, constants.R_OK);
+    const stats = await stat(fullPath);
+    const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
+    assertValid(sizeValidation, (msg, data) => 
+      Errors.invalidParams(msg, { path: notePath, ...data })
+    );
   } catch (error) {
+    if (error instanceof MCPError) {
+      throw error;
+    }
     throw Errors.resourceNotFound(notePath, { path: notePath });
   }
   
+  // I/O: Read file
   try {
     const content = await readFile(fullPath, 'utf-8');
     return content;
@@ -85,25 +146,29 @@ export async function readNote(vaultPath, notePath) {
   }
 }
 
+/**
+ * Write note content (I/O function with validation)
+ */
 export async function writeNote(vaultPath, notePath, content) {
-  // Validate required parameters
-  validateRequiredParams({ path: notePath, content }, ['path', 'content']);
+  // Pure validations
+  const paramValidation = validateRequiredParameters({ path: notePath, content }, ['path', 'content']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
   
-  // Validate markdown file
-  validateMarkdownFile(notePath);
+  const extensionValidation = validateMarkdownExtension(notePath);
+  assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
   
-  // Validate and resolve the path
-  const fullPath = validatePath(vaultPath, notePath);
+  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
+  
+  const fullPath = pathValidation.resolvedPath;
   const dir = path.dirname(fullPath);
   
-  // Sanitize content
-  const sanitizedContent = sanitizeContent(content);
+  // Pure: Sanitize content
+  const sanitizedContent = sanitizeContentPure(content);
   
+  // I/O: Write file
   try {
-    // Create directory if it doesn't exist
     await mkdir(dir, { recursive: true });
-    
-    // Write the file
     await writeFile(fullPath, sanitizedContent, 'utf-8');
     return notePath;
   } catch (error) {
@@ -114,64 +179,54 @@ export async function writeNote(vaultPath, notePath, content) {
   }
 }
 
+/**
+ * Delete note (I/O function with validation)
+ */
 export async function deleteNote(vaultPath, notePath) {
-  const fullPath = path.join(vaultPath, notePath);
-  await unlink(fullPath);
-  return notePath;
-}
-
-export function extractTags(content) {
-  const tags = new Set();
+  // Pure validations
+  const paramValidation = validateRequiredParameters({ path: notePath }, ['path']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
   
-  // Extract frontmatter tags
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-  if (frontmatterMatch) {
-    const frontmatter = frontmatterMatch[1];
-    
-    // Match tags in array format: tags: [tag1, tag2]
-    const arrayMatch = frontmatter.match(/tags:\s*\[(.*?)\]/);
-    if (arrayMatch) {
-      const tagList = arrayMatch[1].split(',').map(tag => tag.trim().replace(/['"]/g, ''));
-      tagList.forEach(tag => tags.add(tag));
-    } else {
-      // Match tags in YAML list format
-      const yamlListMatch = frontmatter.match(/tags:\s*\n((?:\s*-\s*.+\n?)+)/);
-      if (yamlListMatch) {
-        const tagLines = yamlListMatch[1].split('\n').filter(line => line.trim());
-        tagLines.forEach(line => {
-          const tag = line.replace(/^\s*-\s*/, '').trim();
-          if (tag) tags.add(tag);
-        });
-      } else {
-        // Match single tag: tags: tag1
-        const singleMatch = frontmatter.match(/tags:\s*(.+)/);
-        if (singleMatch) {
-          const tag = singleMatch[1].trim();
-          if (tag) tags.add(tag);
-        }
-      }
+  const extensionValidation = validateMarkdownExtension(notePath);
+  assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
+  
+  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
+  
+  const fullPath = pathValidation.resolvedPath;
+  
+  // I/O: Check file exists
+  try {
+    await access(fullPath, constants.W_OK);
+  } catch (error) {
+    throw Errors.resourceNotFound(notePath, { path: notePath });
+  }
+  
+  // I/O: Delete file
+  try {
+    await unlink(fullPath);
+    return notePath;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw Errors.resourceNotFound(notePath, { path: notePath });
     }
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      throw Errors.accessDenied(`Permission denied: ${notePath}`, { path: notePath });
+    }
+    throw Errors.internalError(`Failed to delete note: ${error.message}`, { path: notePath });
   }
-  
-  // Extract inline tags, excluding code blocks
-  const codeBlockRegex = /```[\s\S]*?```/g;
-  const contentWithoutCodeBlocks = content.replace(codeBlockRegex, '');
-  
-  // Match hashtags that are not part of headings
-  // Tag name can contain letters, numbers, underscore, hyphen, plus, dot, and forward slash
-  const inlineTagRegex = /(?:^|[^#\w])#([a-zA-Z0-9_\-+.\/]+?)(?=[^a-zA-Z0-9_\-+\/]|$)/gm;
-  let match;
-  while ((match = inlineTagRegex.exec(contentWithoutCodeBlocks)) !== null) {
-    let tag = match[1];
-    // Remove trailing dots (but keep dots inside the tag like .net)
-    tag = tag.replace(/\.+$/, '');
-    if (tag) tags.add(tag);
-  }
-  
-  return Array.from(tags);
 }
 
+/**
+ * Search notes by tags (I/O function using pure functions)
+ */
 export async function searchByTags(vaultPath, searchTags, directory = null, caseSensitive = false) {
+  // Validate directory path if provided
+  if (directory) {
+    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
+  }
+  
   const searchPattern = directory 
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
@@ -179,30 +234,23 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
   const files = await glob(searchPattern);
   const results = [];
   
-  // Normalize search tags for comparison
-  const normalizedSearchTags = searchTags.map(tag => 
-    caseSensitive ? tag : tag.toLowerCase()
-  );
-  
   for (const file of files) {
-    const content = await readFile(file, 'utf-8');
-    const fileTags = extractTags(content);
-    
-    // Normalize file tags for comparison
-    const normalizedFileTags = fileTags.map(tag => 
-      caseSensitive ? tag : tag.toLowerCase()
-    );
-    
-    // Check if all search tags are present in the file (AND operation)
-    const hasAllTags = normalizedSearchTags.every(searchTag => 
-      normalizedFileTags.includes(searchTag)
-    );
-    
-    if (hasAllTags) {
-      results.push({
-        path: path.relative(vaultPath, file),
-        tags: fileTags
-      });
+    try {
+      // I/O: Read file
+      const content = await readFile(file, 'utf-8');
+      
+      // Pure: Extract tags and check match
+      const fileTags = extractTagsPure(content);
+      
+      if (hasAllTags(fileTags, searchTags, caseSensitive)) {
+        results.push({
+          path: path.relative(vaultPath, file),
+          tags: fileTags
+        });
+      }
+    } catch (error) {
+      // Skip files with read errors
+      continue;
     }
   }
   
@@ -211,3 +259,6 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
     count: results.length
   };
 }
+
+// Re-export the pure extractTags function for backward compatibility
+export const extractTags = extractTagsPure;

@@ -4,6 +4,7 @@ export const toolDefinitions = [
     title: 'Search Vault',
     description: 'Search for content in Obsidian vault notes',
     inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         query: {
@@ -25,6 +26,7 @@ export const toolDefinitions = [
       additionalProperties: false
     },
     outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         results: {
@@ -65,6 +67,7 @@ export const toolDefinitions = [
     title: 'List Notes',
     description: 'List all notes in the vault or a specific directory',
     inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         directory: {
@@ -75,6 +78,7 @@ export const toolDefinitions = [
       additionalProperties: false
     },
     outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         notes: {
@@ -100,6 +104,7 @@ export const toolDefinitions = [
     title: 'Read Note',
     description: 'Read the content of a specific note',
     inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         path: {
@@ -119,6 +124,7 @@ export const toolDefinitions = [
     title: 'Write Note',
     description: 'Create or update a note',
     inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         path: {
@@ -142,6 +148,7 @@ export const toolDefinitions = [
     title: 'Delete Note',
     description: 'Delete a note',
     inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         path: {
@@ -161,6 +168,7 @@ export const toolDefinitions = [
     title: 'Search by Tags',
     description: 'Search for notes by tags (supports both frontmatter and inline tags)',
     inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         tags: {
@@ -186,6 +194,7 @@ export const toolDefinitions = [
       additionalProperties: false
     },
     outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         notes: {

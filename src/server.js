@@ -6,7 +6,7 @@ import {
 import { searchVault, listNotes, readNote, writeNote, deleteNote, searchByTags } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
-import { textResponse, structuredResponse, errorResponse } from './response-formatter.js';
+import { textResponse, structuredResponse, errorResponse, createMetadata } from './response-formatter.js';
 
 export function createServer(vaultPath) {
   const server = new Server(
@@ -37,6 +37,7 @@ export function createServer(vaultPath) {
   // Handle tool calls
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    const startTime = Date.now();
 
     try {
       switch (name) {
@@ -48,7 +49,12 @@ export function createServer(vaultPath) {
           ? `No matches found for "${query}"`
           : `Found ${result.count} matches for "${query}"`;
         
-        return structuredResponse(result, description);
+        const metadata = createMetadata(startTime, { 
+          tool: 'search-vault',
+          filesSearched: result.filesSearched || 0
+        });
+        
+        return structuredResponse(result, description, metadata);
       }
 
       case 'list-notes': {
@@ -59,7 +65,8 @@ export function createServer(vaultPath) {
           ? `No notes found${directory ? ` in ${directory}` : ''}`
           : `Found ${result.count} notes${directory ? ` in ${directory}` : ''}`;
         
-        return structuredResponse(result, description);
+        const metadata = createMetadata(startTime, { tool: 'list-notes' });
+        return structuredResponse(result, description, metadata);
       }
 
       case 'read-note': {
@@ -67,21 +74,30 @@ export function createServer(vaultPath) {
         const content = await readNote(vaultPath, notePath);
         
         // For read-note, we return the content directly as text
-        return textResponse(content);
+        const metadata = createMetadata(startTime, { 
+          tool: 'read-note',
+          contentLength: content.length 
+        });
+        return textResponse(content, metadata);
       }
 
       case 'write-note': {
         const { path: notePath, content } = args;
         await writeNote(vaultPath, notePath, content);
         
-        return textResponse(`Note written successfully to ${notePath}`);
+        const metadata = createMetadata(startTime, { 
+          tool: 'write-note',
+          contentLength: content.length 
+        });
+        return textResponse(`Note written successfully to ${notePath}`, metadata);
       }
 
       case 'delete-note': {
         const { path: notePath } = args;
         await deleteNote(vaultPath, notePath);
         
-        return textResponse(`Note deleted successfully: ${notePath}`);
+        const metadata = createMetadata(startTime, { tool: 'delete-note' });
+        return textResponse(`Note deleted successfully: ${notePath}`, metadata);
       }
 
       case 'search-by-tags': {
@@ -93,7 +109,11 @@ export function createServer(vaultPath) {
           ? `No notes found with tags: ${tagList}`
           : `Found ${result.count} notes with tags: ${tagList}`;
         
-        return structuredResponse(result, description);
+        const metadata = createMetadata(startTime, { 
+          tool: 'search-by-tags',
+          tagsSearched: tags.length 
+        });
+        return structuredResponse(result, description, metadata);
       }
 
       default:

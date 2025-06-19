@@ -2,8 +2,9 @@
 
 [![Tests](https://github.com/Piotr1215/mcp-obsidian/actions/workflows/test.yml/badge.svg)](https://github.com/Piotr1215/mcp-obsidian/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/Piotr1215/mcp-obsidian/graph/badge.svg)](https://codecov.io/gh/Piotr1215/mcp-obsidian)
+[![MCP Compliant](https://img.shields.io/badge/MCP-Compliant-green)](./MCP_SPEC_COMPLIANCE.md)
 
-A Model Context Protocol (MCP) server for Obsidian that works directly with vault files.
+MCP server for Obsidian that provides secure, direct file system access to vault files.
 
 ## Why This Server?
 
@@ -16,11 +17,11 @@ This server instead works directly with Obsidian vault files on disk, making it 
 
 ## Features
 
-- Direct file system access to Obsidian vaults
-- No dependency on running Obsidian instance
-- Compatible with obsidian.nvim workflows
-- Search, read, write, and manage notes via MCP
-- Search notes by tags (supports both frontmatter and inline tags)
+- **Direct file system access** to Obsidian vaults - no Obsidian app required
+- **Security-first design** with path traversal prevention and input validation
+- **High performance** with execution time tracking and resource limits
+- **Rich search capabilities** including regex support and tag-based search
+- **Metadata support** with frontmatter and inline tag parsing
 
 ## Installation
 
@@ -88,3 +89,59 @@ claude mcp list
 ```
 
 You should see `obsidian` in the list of available MCP servers.
+
+## Available Tools
+
+### search-vault
+Search for content across all notes in your vault.
+- Supports regular expressions
+- Case-sensitive/insensitive search
+- Returns line numbers and matched content
+- Optional path filtering
+
+### list-notes
+List all markdown files in your vault or a specific directory.
+- Returns file paths and total count
+- Supports directory filtering
+
+### read-note
+Read the complete content of a specific note.
+- Path validation ensures security
+- File size limits prevent memory issues
+
+### write-note
+Create or update a note with new content.
+- Atomic writes for data integrity
+- Automatic directory creation
+- Content size validation
+
+### delete-note
+Delete a note from your vault.
+- Safe deletion with proper validation
+- Path security checks
+
+### search-by-tags
+Find notes containing specific tags.
+- Supports both YAML frontmatter and inline #tags
+- AND operation for multiple tags
+- Case-sensitive/insensitive matching
+
+## Security Features
+
+This server implements comprehensive security measures:
+
+- **Path Traversal Prevention**: All file paths are validated to prevent access outside the vault
+- **Input Validation**: All inputs validated against JSON schemas
+- **File Size Limits**: Configurable limits prevent memory exhaustion (default: 10MB)
+- **Content Sanitization**: Removes potentially harmful null bytes
+- **Markdown-only Access**: Only `.md` files can be accessed
+
+See [MCP_SPEC_COMPLIANCE.md](./MCP_SPEC_COMPLIANCE.md) for detailed compliance information.
+
+## Contributing
+
+1. Ensure all tests pass: `npm test`
+2. Maintain test coverage above 90%: `npm run coverage`
+3. Follow functional programming principles
+4. Add tests for new features
+5. Update documentation as needed
