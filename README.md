@@ -1,5 +1,8 @@
 # Obsidian MCP Server
 
+[![Tests](https://github.com/Piotr1215/mcp-obsidian/actions/workflows/test.yml/badge.svg)](https://github.com/Piotr1215/mcp-obsidian/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/Piotr1215/mcp-obsidian/graph/badge.svg)](https://codecov.io/gh/Piotr1215/mcp-obsidian)
+
 A Model Context Protocol (MCP) server for Obsidian that works directly with vault files.
 
 ## Why This Server?
@@ -25,5 +28,34 @@ npm install
 ```
 
 ## Usage
+
+### Testing with MCP Inspector
+
+```bash
+# Replace /home/decoder/dev/obsidian/decoder with your vault path
+npx @modelcontextprotocol/inspector node src/index.js /home/decoder/dev/obsidian/decoder
+```
+
+The inspector will open at http://localhost:5173
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run tests with coverage and check thresholds
+npm run coverage
+```
+
+The test suite includes unit tests for all tools and integration tests for the MCP protocol.
+
+### Adding to Claude Desktop
 
 Add to your Claude desktop configuration to enable Obsidian vault access through MCP.
