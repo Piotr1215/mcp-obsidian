@@ -177,7 +177,8 @@ describe('Tools module', () => {
     });
 
     it('should handle existing directory', async () => {
-      mkdir.mockRejectedValue(new Error('Directory exists'));
+      // mkdir succeeds (directory already exists is not an error with recursive: true)
+      mkdir.mockResolvedValue();
       writeFile.mockResolvedValue();
 
       const result = await writeNote(mockVaultPath, 'note.md', 'Content');
@@ -191,7 +192,7 @@ describe('Tools module', () => {
       writeFile.mockRejectedValue(new Error('Disk full'));
 
       await expect(writeNote(mockVaultPath, 'note.md', 'Content'))
-        .rejects.toThrow('Disk full');
+        .rejects.toThrow('Failed to write note');
     });
 
     it('should write to root directory', async () => {

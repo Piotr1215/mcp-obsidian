@@ -1,8 +1,19 @@
-import { readFile, writeFile, mkdir, unlink } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink, access } from 'fs/promises';
+import { constants } from 'fs';
 import { glob } from 'glob';
 import path from 'path';
+import { Errors } from './errors.js';
+import { validatePath, validateMarkdownFile, validateRequiredParams, sanitizeContent } from './security.js';
 
 export async function searchVault(vaultPath, query, searchPath, caseSensitive = false) {
+  // Validate required parameters
+  validateRequiredParams({ query }, ['query']);
+  
+  // Validate search path if provided
+  if (searchPath) {
+    validatePath(vaultPath, searchPath);
+  }
+  
   const searchPattern = searchPath 
     ? path.join(vaultPath, searchPath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
@@ -47,23 +58,60 @@ export async function listNotes(vaultPath, directory) {
 }
 
 export async function readNote(vaultPath, notePath) {
-  const fullPath = path.join(vaultPath, notePath);
-  const content = await readFile(fullPath, 'utf-8');
-  return content;
+  // Validate required parameters
+  validateRequiredParams({ path: notePath }, ['path']);
+  
+  // Validate markdown file
+  validateMarkdownFile(notePath);
+  
+  // Validate and resolve the path
+  const fullPath = validatePath(vaultPath, notePath);
+  
+  // Check if file exists
+  try {
+    await access(fullPath, constants.R_OK);
+  } catch (error) {
+    throw Errors.resourceNotFound(notePath, { path: notePath });
+  }
+  
+  try {
+    const content = await readFile(fullPath, 'utf-8');
+    return content;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw Errors.resourceNotFound(notePath, { path: notePath });
+    }
+    throw Errors.internalError(`Failed to read note: ${error.message}`, { path: notePath });
+  }
 }
 
 export async function writeNote(vaultPath, notePath, content) {
-  const fullPath = path.join(vaultPath, notePath);
+  // Validate required parameters
+  validateRequiredParams({ path: notePath, content }, ['path', 'content']);
+  
+  // Validate markdown file
+  validateMarkdownFile(notePath);
+  
+  // Validate and resolve the path
+  const fullPath = validatePath(vaultPath, notePath);
   const dir = path.dirname(fullPath);
   
-  try {
-    await mkdir(dir, { recursive: true });
-  } catch (error) {
-    // Directory might already exist
-  }
+  // Sanitize content
+  const sanitizedContent = sanitizeContent(content);
   
-  await writeFile(fullPath, content, 'utf-8');
-  return notePath;
+  try {
+    // Create directory if it doesn't exist
+    await mkdir(dir, { recursive: true });
+    
+    // Write the file
+    await writeFile(fullPath, sanitizedContent, 'utf-8');
+    return notePath;
+  } catch (error) {
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      throw Errors.accessDenied(`Permission denied: ${notePath}`, { path: notePath });
+    }
+    throw Errors.internalError(`Failed to write note: ${error.message}`, { path: notePath });
+  }
 }
 
 export async function deleteNote(vaultPath, notePath) {
