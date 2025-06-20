@@ -6,7 +6,7 @@ import { Errors, MCPError } from './errors.js';
 import { config } from './config.js';
 
 // Import pure functions
-import { findMatchesInContent, transformSearchResults, limitSearchResults } from './search.js';
+import { findMatchesInContent, findMatchesWithOperators, transformSearchResults, limitSearchResults } from './search.js';
 import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
 import { extractH1Title, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
@@ -65,8 +65,25 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
       // I/O: Read file
       const content = await readFile(file, 'utf-8');
       
-      // Pure: Find matches
-      const matches = findMatchesInContent(content, query, caseSensitive);
+      // Check if query contains operators
+      const hasOperators = /\b(AND|OR|NOT)\b|[:\-()]|"/.test(query);
+      
+      let matches;
+      if (hasOperators) {
+        // Extract metadata for operator-based search
+        const titleData = extractH1Title(content);
+        const tags = extractTagsPure(content);
+        const metadata = { 
+          title: titleData ? titleData.title : '', 
+          tags 
+        };
+        
+        // Use operator-based search
+        matches = findMatchesWithOperators(content, query, metadata, caseSensitive);
+      } else {
+        // Use simple string matching for backward compatibility
+        matches = findMatchesInContent(content, query, caseSensitive);
+      }
       
       if (matches.length > 0) {
         fileMatches.push({ file, matches });

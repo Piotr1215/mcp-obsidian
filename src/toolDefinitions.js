@@ -2,14 +2,14 @@ export const toolDefinitions = [
   {
     name: 'search-vault',
     title: 'Search Vault',
-    description: 'Search for content in Obsidian vault notes',
+    description: 'Search for content in Obsidian vault notes. Supports boolean operators (AND, OR, NOT), field specifiers (title:, content:, tag:), quoted phrases, and parentheses for grouping. Examples: "term1 AND term2", "title:readme OR tag:important", "(term1 OR term2) AND -deprecated"',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Search query (supports regex)',
+          description: 'Search query. Supports: AND/OR/NOT operators, field specifiers (title:, content:, tag:), quoted phrases, parentheses for grouping',
           minLength: 1
         },
         path: {

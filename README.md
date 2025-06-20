@@ -94,10 +94,19 @@ You should see `obsidian` in the list of available MCP servers.
 
 ### search-vault
 Search for content across all notes in your vault.
-- Supports regular expressions
+- Boolean operators: AND, OR, NOT (also supports &&, ||, -)
+- Field specifiers: `title:term`, `content:term`, `tag:term`
+- Quoted phrases: `"exact phrase"`
+- Grouping with parentheses: `(term1 OR term2) AND term3`
 - Case-sensitive/insensitive search
 - Returns line numbers and matched content
 - Optional path filtering
+
+Examples:
+- `readme AND install` - Find notes containing both words
+- `title:setup OR tag:documentation` - Find by title or tag
+- `"getting started" -deprecated` - Exact phrase, excluding deprecated
+- `(python OR javascript) AND tutorial` - Complex queries with grouping
 
 ### search-by-title
 Search for notes by their H1 title (# Title).
