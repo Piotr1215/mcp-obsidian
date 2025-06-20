@@ -33,8 +33,9 @@ describe('searchVault with operators', () => {
     console.log('Search result:', result);
     
     // Should only find the second note
-    expect(result.count).toBe(1);
-    expect(result.results[0].file).toBe('note2.md');
+    expect(result.totalMatches).toBeGreaterThan(0);
+    expect(result.fileCount).toBe(1);
+    expect(result.files[0].path).toBe('note2.md');
   });
 
   it('should handle minus operator correctly', async () => {
@@ -57,8 +58,9 @@ describe('searchVault with operators', () => {
     console.log('Search result with minus:', result);
     
     // Should only find the second note
-    expect(result.count).toBe(1);
-    expect(result.results[0].file).toBe('note2.md');
+    expect(result.totalMatches).toBeGreaterThan(0);
+    expect(result.fileCount).toBe(1);
+    expect(result.files[0].path).toBe('note2.md');
   });
 
   it('should show what evaluateExpression returns', async () => {
@@ -81,7 +83,7 @@ describe('searchVault with operators', () => {
     console.log('Result for "mcp -caas":', result2);
     
     // Both should exclude the note with caas
-    expect(result1.count).toBe(0);
-    expect(result2.count).toBe(0);
+    expect(result1.totalMatches).toBe(0);
+    expect(result2.totalMatches).toBe(0);
   });
 });

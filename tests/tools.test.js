@@ -33,12 +33,16 @@ describe('Tools module', () => {
 
       expect(glob).toHaveBeenCalledWith('/test/vault/**/*.md');
       expect(readFile).toHaveBeenCalledTimes(2);
-      expect(result.count).toBe(3);
-      expect(result.results).toHaveLength(3);
-      expect(result.results[0]).toEqual({
-        file: 'note1.md',
-        line: 2,
-        content: 'This contains TEST'
+      expect(result.totalMatches).toBe(3);
+      expect(result.fileCount).toBe(2);
+      expect(result.files).toHaveLength(2);
+      expect(result.files[0]).toEqual({
+        path: 'note1.md',
+        matchCount: 1,
+        matches: [{
+          line: 2,
+          content: 'This contains TEST'
+        }]
       });
     });
 
@@ -50,8 +54,8 @@ describe('Tools module', () => {
 
       const result = await searchVault(mockVaultPath, 'Test', null, true);
 
-      expect(result.count).toBe(1);
-      expect(result.results[0].line).toBe(2);
+      expect(result.totalMatches).toBe(1);
+      expect(result.files[0].matches[0].line).toBe(2);
     });
 
     it('should search within specific path', async () => {
@@ -69,8 +73,8 @@ describe('Tools module', () => {
 
       const result = await searchVault(mockVaultPath, 'notfound', null, false);
 
-      expect(result.count).toBe(0);
-      expect(result.results).toHaveLength(0);
+      expect(result.totalMatches).toBe(0);
+      expect(result.files).toHaveLength(0);
     });
 
     it('should handle file read errors', async () => {
@@ -81,8 +85,8 @@ describe('Tools module', () => {
       const result = await searchVault(mockVaultPath, 'test', null, false);
       
       // Should return empty results since file was skipped
-      expect(result.count).toBe(0);
-      expect(result.results).toHaveLength(0);
+      expect(result.totalMatches).toBe(0);
+      expect(result.files).toHaveLength(0);
     });
   });
 

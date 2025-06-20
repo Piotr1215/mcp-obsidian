@@ -23,6 +23,13 @@ This server instead works directly with Obsidian vault files on disk, making it 
 - **Rich search capabilities** including regex support and tag-based search
 - **Metadata support** with frontmatter and inline tag parsing
 
+## Recent Updates
+
+### 🎉 New Features 
+- **Context Snippets in Search Results**: Search results now include surrounding lines for better context understanding
+- **Match Highlighting**: Search terms are highlighted with **bold** markers in results
+- **Improved Search Result Structure**: Results are now grouped by file with match counts and snippets
+
 ## Installation
 
 ```bash
@@ -94,19 +101,53 @@ You should see `obsidian` in the list of available MCP servers.
 
 ### search-vault
 Search for content across all notes in your vault.
+
+**Features:**
 - Boolean operators: AND, OR, NOT (also supports &&, ||, -)
 - Field specifiers: `title:term`, `content:term`, `tag:term`
 - Quoted phrases: `"exact phrase"`
 - Grouping with parentheses: `(term1 OR term2) AND term3`
 - Case-sensitive/insensitive search
-- Returns line numbers and matched content
+- **Context snippets** (NEW): See surrounding lines for each match
+- **Match highlighting** (NEW): Search terms are highlighted with **bold**
+- Returns grouped results by file with match counts
 - Optional path filtering
 
-Examples:
+**Context Options:**
+- `includeContext` (default: true) - Show surrounding lines
+- `contextLines` (default: 2) - Number of lines before/after match (0-10)
+
+**Examples:**
 - `readme AND install` - Find notes containing both words
 - `title:setup OR tag:documentation` - Find by title or tag
 - `"getting started" -deprecated` - Exact phrase, excluding deprecated
 - `(python OR javascript) AND tutorial` - Complex queries with grouping
+
+**Example Output with Context:**
+```json
+{
+  "files": [{
+    "path": "notes/dotfiles.md",
+    "matchCount": 3,
+    "matches": [{
+      "line": 42,
+      "content": "Managing my dotfiles with stow",
+      "context": {
+        "lines": [
+          { "number": 40, "text": "## Configuration Management", "isMatch": false },
+          { "number": 41, "text": "", "isMatch": false },
+          { "number": 42, "text": "Managing my dotfiles with stow", "isMatch": true },
+          { "number": 43, "text": "has simplified my setup process.", "isMatch": false },
+          { "number": 44, "text": "", "isMatch": false }
+        ],
+        "highlighted": "Managing my **dotfiles** with stow"
+      }
+    }]
+  }],
+  "totalMatches": 43,
+  "fileCount": 15
+}
+```
 
 ### search-by-title
 Search for notes by their H1 title (# Title).

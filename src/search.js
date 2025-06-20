@@ -5,15 +5,19 @@
 import { parseSearchQuery, evaluateExpression } from './search-operators.js';
 import { extractH1Title } from './title-search.js';
 import { extractTags } from './tags.js';
+import { extractContextLines, formatContextResult } from './search-context.js';
 
 /**
  * Searches for matches in text content (pure function)
  * @param {string} content - The text content to search
  * @param {string} query - The search query
  * @param {boolean} caseSensitive - Whether to perform case-sensitive search
+ * @param {Object} options - Additional options including context settings
  * @returns {Array} Array of match objects with line number and content
  */
-export function findMatchesInContent(content, query, caseSensitive = false) {
+export function findMatchesInContent(content, query, caseSensitive = false, options = {}) {
+  const { includeContext = false, contextLines = 2 } = options;
+  
   if (!content) {
     return [];
   }
@@ -33,10 +37,19 @@ export function findMatchesInContent(content, query, caseSensitive = false) {
     const searchLine = caseSensitive ? line : line.toLowerCase();
     
     if (searchLine.includes(searchQuery)) {
-      matches.push({
+      const match = {
         line: index + 1,
         content: line.trim()
-      });
+      };
+      
+      // Add context if requested
+      if (includeContext) {
+        const contextData = extractContextLines(lines, index, contextLines);
+        const formattedMatch = formatContextResult(match, contextData, query);
+        matches.push(formattedMatch);
+      } else {
+        matches.push(match);
+      }
     }
     
     return matches;
@@ -50,16 +63,20 @@ export function findMatchesInContent(content, query, caseSensitive = false) {
  * @returns {object} Search results with count
  */
 export function transformSearchResults(fileMatches, basePath) {
-  const results = fileMatches.flatMap(({ file, matches }) =>
-    matches.map(match => ({
-      file: makeRelativePath(file, basePath),
-      ...match
-    }))
-  );
+  // Group results by file and include match snippets
+  const fileResults = fileMatches.map(({ file, matches }) => ({
+    path: makeRelativePath(file, basePath),
+    matchCount: matches.length,
+    matches: matches.slice(0, 5) // Limit to first 5 matches per file to avoid overwhelming output
+  }));
+  
+  // Calculate total match count
+  const totalMatches = fileMatches.reduce((sum, { matches }) => sum + matches.length, 0);
   
   return {
-    results,
-    count: results.length,
+    files: fileResults,
+    totalMatches,
+    fileCount: fileResults.length,
     filesSearched: fileMatches.length
   };
 }
@@ -93,16 +110,44 @@ export function makeRelativePath(absolutePath, basePath) {
  * @returns {object} Limited search results
  */
 export function limitSearchResults(searchResults, maxResults) {
-  if (searchResults.results.length <= maxResults) {
+  if (searchResults.totalMatches <= maxResults) {
     return searchResults;
   }
   
+  // Limit by total matches, not by files
+  // This ensures we show as many files as possible within the limit
+  let matchCount = 0;
+  const limitedFiles = [];
+  
+  for (const file of searchResults.files) {
+    if (matchCount >= maxResults) {
+      break;
+    }
+    
+    const remainingSlots = maxResults - matchCount;
+    if (file.matchCount <= remainingSlots) {
+      // Include all matches from this file
+      limitedFiles.push(file);
+      matchCount += file.matchCount;
+    } else {
+      // Include only partial matches from this file
+      limitedFiles.push({
+        ...file,
+        matchCount: remainingSlots,
+        matches: file.matches.slice(0, remainingSlots),
+        partialFile: true
+      });
+      matchCount = maxResults;
+    }
+  }
+  
   return {
-    results: searchResults.results.slice(0, maxResults),
-    count: maxResults,
+    files: limitedFiles,
+    totalMatches: matchCount,
+    fileCount: limitedFiles.length,
     filesSearched: searchResults.filesSearched,
     truncated: true,
-    message: `Results limited to ${maxResults} matches`
+    message: `Results limited to ${maxResults} matches across ${limitedFiles.length} files`
   };
 }
 
@@ -112,9 +157,12 @@ export function limitSearchResults(searchResults, maxResults) {
  * @param {string} query - The search query (may include operators)
  * @param {Object} metadata - Note metadata (title, tags, etc.)
  * @param {boolean} caseSensitive - Whether to perform case-sensitive search
+ * @param {Object} options - Additional options including context settings
  * @returns {Array} Array of match objects with line number and content
  */
-export function findMatchesWithOperators(content, query, metadata, caseSensitive = false) {
+export function findMatchesWithOperators(content, query, metadata, caseSensitive = false, options = {}) {
+  const { includeContext = false, contextLines = 2 } = options;
+  
   if (!content) {
     return [];
   }
@@ -149,19 +197,28 @@ export function findMatchesWithOperators(content, query, metadata, caseSensitive
     // For title searches, only return the title line itself
     const titleMatch = lines.findIndex(line => line.trim().match(/^#\s+(.+)$/));
     if (titleMatch !== -1) {
-      matchedLines.push({
+      const match = {
         line: titleMatch + 1,
         content: lines[titleMatch].trim()
-      });
+      };
+      
+      if (includeContext) {
+        const contextData = extractContextLines(lines, titleMatch, contextLines);
+        const formattedMatch = formatContextResult(match, contextData, expression.value);
+        matchedLines.push(formattedMatch);
+      } else {
+        matchedLines.push(match);
+      }
     }
   } else if (isPureFieldSearch && expression.field === 'tag') {
     // For tag searches, return lines containing the tags
     // This is tricky because tags can be in frontmatter or inline
     // For now, return the first line as a summary
-    matchedLines.push({
+    const match = {
       line: 1,
       content: `[Document matches tag: ${expression.value}]`
-    });
+    };
+    matchedLines.push(match);
   } else {
     // For content searches and complex queries, return all matching lines
     const terms = extractSearchTerms(expression);
@@ -176,10 +233,23 @@ export function findMatchesWithOperators(content, query, metadata, caseSensitive
       });
       
       if (lineMatches) {
-        matchedLines.push({
+        const match = {
           line: index + 1,
           content: line.trim()
-        });
+        };
+        
+        if (includeContext) {
+          const contextData = extractContextLines(lines, index, contextLines);
+          // Use the first matching term for highlighting
+          const highlightTerm = terms.find(term => {
+            const searchTerm = caseSensitive ? term : term.toLowerCase();
+            return searchLine.includes(searchTerm);
+          });
+          const formattedMatch = formatContextResult(match, contextData, highlightTerm || query);
+          matchedLines.push(formattedMatch);
+        } else {
+          matchedLines.push(match);
+        }
       }
     });
   }

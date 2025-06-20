@@ -75,20 +75,23 @@ describe('Functional Search Utilities', () => {
       
       const result = transformSearchResults(fileMatches, '/base');
       
-      expect(result.count).toBe(3);
+      expect(result.totalMatches).toBe(3);
       expect(result.filesSearched).toBe(2);
-      expect(result.results).toHaveLength(3);
-      expect(result.results[0]).toEqual({
-        file: 'file1.md',
-        line: 1,
-        content: 'Match 1'
+      expect(result.files).toHaveLength(2);
+      expect(result.files[0]).toEqual({
+        path: 'file1.md',
+        matchCount: 2,
+        matches: [
+          { line: 1, content: 'Match 1' },
+          { line: 3, content: 'Match 2' }
+        ]
       });
-      expect(result.results[2].file).toBe('folder/file2.md');
+      expect(result.files[1].path).toBe('folder/file2.md');
     });
 
     it('should handle empty file matches', () => {
       const result = transformSearchResults([], '/base');
-      expect(result).toEqual({ results: [], count: 0, filesSearched: 0 });
+      expect(result).toEqual({ files: [], totalMatches: 0, fileCount: 0, filesSearched: 0 });
     });
   });
 
@@ -117,12 +120,17 @@ describe('Functional Search Utilities', () => {
 
   describe('limitSearchResults', () => {
     const createResults = (count) => ({
-      results: Array(count).fill(null).map((_, i) => ({
-        file: `file${i}.md`,
-        line: i + 1,
-        content: `Match ${i}`
+      files: Array(Math.ceil(count / 5)).fill(null).map((_, i) => ({
+        path: `file${i}.md`,
+        matchCount: Math.min(5, count - i * 5),
+        matches: Array(Math.min(5, count - i * 5)).fill(null).map((_, j) => ({
+          line: i * 5 + j + 1,
+          content: `Match ${i * 5 + j}`
+        }))
       })),
-      count
+      totalMatches: count,
+      fileCount: Math.ceil(count / 5),
+      filesSearched: Math.ceil(count / 5)
     });
 
     it('should not limit results under threshold', () => {
@@ -137,8 +145,7 @@ describe('Functional Search Utilities', () => {
       const results = createResults(20);
       const limited = limitSearchResults(results, 10);
       
-      expect(limited.count).toBe(10);
-      expect(limited.results).toHaveLength(10);
+      expect(limited.totalMatches).toBe(10);
       expect(limited.truncated).toBe(true);
       expect(limited.message).toMatch(/limited to 10/);
     });
@@ -147,8 +154,8 @@ describe('Functional Search Utilities', () => {
       const results = createResults(5);
       const limited = limitSearchResults(results, 3);
       
-      expect(limited.results[0].content).toBe('Match 0');
-      expect(limited.results[2].content).toBe('Match 2');
+      expect(limited.files[0].matches[0].content).toBe('Match 0');
+      expect(limited.files[0].matches[2].content).toBe('Match 2');
     });
   });
 });

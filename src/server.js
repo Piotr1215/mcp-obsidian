@@ -42,12 +42,40 @@ export function createServer(vaultPath) {
     try {
       switch (name) {
       case 'search-vault': {
-        const { query, path: searchPath, caseSensitive = false } = args;
-        const result = await searchVault(vaultPath, query, searchPath, caseSensitive);
+        const { query, path: searchPath, caseSensitive = false, includeContext = true, contextLines = 2 } = args;
+        const contextOptions = { includeContext, contextLines };
+        const result = await searchVault(vaultPath, query, searchPath, caseSensitive, contextOptions);
         
-        const description = result.count === 0 
+        let description = result.totalMatches === 0 
           ? `No matches found for "${query}"`
-          : `Found ${result.count} matches for "${query}"`;
+          : `Found ${result.totalMatches} matches in ${result.fileCount} files for "${query}"`;
+        
+        // Add file results to the description when context is included
+        if (includeContext && result.files.length > 0) {
+          description += '\n\n';
+          result.files.forEach(file => {
+            description += `📄 ${file.path} (${file.matchCount} matches)\n`;
+            file.matches.slice(0, 3).forEach(match => {
+              if (match.context) {
+                description += `  Line ${match.line}: ${match.context.highlighted}\n`;
+                if (match.context.lines.length > 1) {
+                  const contextPreview = match.context.lines
+                    .filter(l => !l.isMatch)
+                    .slice(0, 2)
+                    .map(l => `    ${l.number}: ${l.text.substring(0, 80)}${l.text.length > 80 ? '...' : ''}`)
+                    .join('\n');
+                  if (contextPreview) description += contextPreview + '\n';
+                }
+              } else {
+                description += `  Line ${match.line}: ${match.content}\n`;
+              }
+            });
+            if (file.matchCount > 3) {
+              description += `  ... and ${file.matchCount - 3} more matches\n`;
+            }
+            description += '\n';
+          });
+        }
         
         const metadata = createMetadata(startTime, { 
           tool: 'search-vault',

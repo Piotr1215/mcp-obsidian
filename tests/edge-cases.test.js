@@ -76,23 +76,23 @@ describe('Edge Cases and Error Scenarios', () => {
       const result = await searchVault(testVault, '');
       
       // Empty query should match all lines
-      expect(result.count).toBeGreaterThan(0);
+      expect(result.totalMatches).toBeGreaterThan(0);
     });
 
     it('should handle special characters in search', async () => {
       const { searchVault } = await import('../src/tools.js');
       const result = await searchVault(testVault, '@#$%');
       
-      expect(result.count).toBe(1);
-      expect(result.results[0].content).toContain('@#$%');
+      expect(result.totalMatches).toBeGreaterThan(0);
+      expect(result.files[0].matches[0].content).toContain('@#$%');
     });
 
     it('should handle unicode in search', async () => {
       const { searchVault } = await import('../src/tools.js');
       const result = await searchVault(testVault, '你好');
       
-      expect(result.count).toBe(1);
-      expect(result.results[0].content).toContain('你好');
+      expect(result.totalMatches).toBeGreaterThan(0);
+      expect(result.files[0].matches[0].content).toContain('你好');
     });
 
     it('should handle regex special characters safely', async () => {

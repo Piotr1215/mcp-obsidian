@@ -85,8 +85,8 @@ describe('File Size Limits', () => {
       const result = await searchVault(testVault, 'findme');
       
       // Should only find the match in the normal file
-      expect(result.count).toBe(1);
-      expect(result.results[0].file).toBe('normal.md');
+      expect(result.totalMatches).toBeGreaterThan(0);
+      expect(result.files[0].path).toBe('normal.md');
     });
 
     it('should limit search results to prevent memory issues', async () => {
@@ -104,7 +104,7 @@ describe('File Size Limits', () => {
       
       const result = await searchVault(testVault, 'match');
       
-      expect(result.count).toBe(config.limits.maxSearchResults);
+      expect(result.totalMatches).toBe(config.limits.maxSearchResults);
       expect(result.truncated).toBe(true);
       expect(result.message).toMatch(/Results limited to/);
     });

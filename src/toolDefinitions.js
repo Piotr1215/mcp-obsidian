@@ -21,6 +21,18 @@ export const toolDefinitions = [
           description: 'Case sensitive search (default: false)',
           default: false
         },
+        includeContext: {
+          type: 'boolean',
+          description: 'Include surrounding lines for context (default: true)',
+          default: true
+        },
+        contextLines: {
+          type: 'integer',
+          description: 'Number of lines before and after match to include (default: 2)',
+          default: 2,
+          minimum: 0,
+          maximum: 10
+        }
       },
       required: ['query'],
       additionalProperties: false
@@ -29,36 +41,95 @@ export const toolDefinitions = [
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
-        results: {
+        files: {
           type: 'array',
+          description: 'List of files containing matches',
           items: {
             type: 'object',
             properties: {
-              file: {
+              path: {
                 type: 'string',
                 description: 'Path to the file relative to vault root'
               },
-              line: {
+              matchCount: {
                 type: 'integer',
-                description: 'Line number where match was found',
+                description: 'Number of matches in this file',
                 minimum: 1
               },
-              content: {
-                type: 'string',
-                description: 'Content of the matching line'
+              matches: {
+                type: 'array',
+                description: 'List of matches in this file',
+                items: {
+                  type: 'object',
+                  properties: {
+                    line: {
+                      type: 'integer',
+                      description: 'Line number where match was found',
+                      minimum: 1
+                    },
+                    content: {
+                      type: 'string',
+                      description: 'Content of the matching line'
+                    },
+                    context: {
+                      type: 'object',
+                      description: 'Context information if includeContext is true',
+                      properties: {
+                        lines: {
+                          type: 'array',
+                          description: 'Surrounding lines with line numbers',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              number: {
+                                type: 'integer',
+                                description: 'Line number',
+                                minimum: 1
+                              },
+                              text: {
+                                type: 'string',
+                                description: 'Line content'
+                              },
+                              isMatch: {
+                                type: 'boolean',
+                                description: 'Whether this is the matching line'
+                              }
+                            },
+                            required: ['number', 'text', 'isMatch']
+                          }
+                        },
+                        highlighted: {
+                          type: 'string',
+                          description: 'Matching line with search terms highlighted using **'
+                        }
+                      },
+                      required: ['lines', 'highlighted']
+                    }
+                  },
+                  required: ['line', 'content']
+                }
               }
             },
-            required: ['file', 'line', 'content'],
-            additionalProperties: false
+            required: ['path', 'matchCount', 'matches']
           }
         },
-        count: {
+        totalMatches: {
           type: 'integer',
-          description: 'Total number of matches found',
+          description: 'Total number of matches across all files',
+          minimum: 0
+        },
+        fileCount: {
+          type: 'integer',
+          description: 'Number of files containing matches',
+          minimum: 0
+        },
+        filesSearched: {
+          type: 'integer',
+          description: 'Total number of files searched',
           minimum: 0
         }
       },
-      required: ['results', 'count'],
+      required: ['files', 'totalMatches', 'fileCount', 'filesSearched'],
       additionalProperties: false
     }
   },

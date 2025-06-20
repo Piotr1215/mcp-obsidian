@@ -31,7 +31,7 @@ function assertValid(validationResult, errorFactory) {
 /**
  * Search for content in vault (I/O function using pure functions)
  */
-export async function searchVault(vaultPath, query, searchPath, caseSensitive = false) {
+export async function searchVault(vaultPath, query, searchPath, caseSensitive = false, contextOptions = {}) {
   // Validate using pure function
   const paramValidation = validateRequiredParameters({ query }, ['query']);
   assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
@@ -79,10 +79,10 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
         };
         
         // Use operator-based search
-        matches = findMatchesWithOperators(content, query, metadata, caseSensitive);
+        matches = findMatchesWithOperators(content, query, metadata, caseSensitive, contextOptions);
       } else {
         // Use simple string matching for backward compatibility
-        matches = findMatchesInContent(content, query, caseSensitive);
+        matches = findMatchesInContent(content, query, caseSensitive, contextOptions);
       }
       
       if (matches.length > 0) {
