@@ -3,7 +3,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { searchVault, listNotes, readNote, writeNote, deleteNote, searchByTags } from './tools.js';
+import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
 import { textResponse, structuredResponse, errorResponse, createMetadata } from './response-formatter.js';
@@ -51,6 +51,22 @@ export function createServer(vaultPath) {
         
         const metadata = createMetadata(startTime, { 
           tool: 'search-vault',
+          filesSearched: result.filesSearched || 0
+        });
+        
+        return structuredResponse(result, description, metadata);
+      }
+
+      case 'search-by-title': {
+        const { query, path: searchPath, caseSensitive = false } = args;
+        const result = await searchByTitle(vaultPath, query, searchPath, caseSensitive);
+        
+        const description = result.count === 0 
+          ? `No notes found with title matching "${query}"`
+          : `Found ${result.count} notes with title matching "${query}"`;
+        
+        const metadata = createMetadata(startTime, { 
+          tool: 'search-by-title',
           filesSearched: result.filesSearched || 0
         });
         
@@ -113,6 +129,33 @@ export function createServer(vaultPath) {
           tool: 'search-by-tags',
           tagsSearched: tags.length 
         });
+        return structuredResponse(result, description, metadata);
+      }
+
+      case 'get-note-metadata': {
+        const { path: notePath, batch = false, directory } = args;
+        
+        // In batch mode with directory, pass directory as the path
+        const pathArg = batch && directory ? directory : notePath;
+        const result = await getNoteMetadata(vaultPath, pathArg, { batch });
+        
+        let description;
+        if (batch) {
+          description = result.count === 0
+            ? 'No notes found'
+            : `Retrieved metadata for ${result.count} notes`;
+          if (result.errors && result.errors.length > 0) {
+            description += ` (${result.errors.length} errors)`;
+          }
+        } else {
+          description = `Retrieved metadata for: ${notePath}`;
+        }
+        
+        const metadata = createMetadata(startTime, { 
+          tool: 'get-note-metadata',
+          mode: batch ? 'batch' : 'single'
+        });
+        
         return structuredResponse(result, description, metadata);
       }
 

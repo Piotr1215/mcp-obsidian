@@ -63,6 +63,74 @@ export const toolDefinitions = [
     }
   },
   {
+    name: 'search-by-title',
+    title: 'Search by Title',
+    description: 'Search for notes by their H1 title',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Title search query',
+          minLength: 1
+        },
+        path: {
+          type: 'string',
+          description: 'Optional path within vault to search',
+        },
+        caseSensitive: {
+          type: 'boolean',
+          description: 'Case sensitive search (default: false)',
+          default: false
+        },
+      },
+      required: ['query'],
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              file: {
+                type: 'string',
+                description: 'Path to the file relative to vault root'
+              },
+              title: {
+                type: 'string',
+                description: 'The H1 title of the note'
+              },
+              line: {
+                type: 'integer',
+                description: 'Line number where title was found',
+                minimum: 1
+              }
+            },
+            required: ['file', 'title', 'line'],
+            additionalProperties: false
+          }
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of results found',
+          minimum: 0
+        },
+        filesSearched: {
+          type: 'integer',
+          description: 'Number of files searched',
+          minimum: 0
+        }
+      },
+      required: ['results', 'count', 'filesSearched'],
+      additionalProperties: false
+    }
+  },
+  {
     name: 'list-notes',
     title: 'List Notes',
     description: 'List all notes in the vault or a specific directory',
@@ -227,6 +295,115 @@ export const toolDefinitions = [
       },
       required: ['notes', 'count'],
       additionalProperties: false
+    }
+  },
+  {
+    name: 'get-note-metadata',
+    title: 'Get Note Metadata',
+    description: 'Get metadata for a specific note or all notes in the vault',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to a specific note (for single note mode)',
+        },
+        batch: {
+          type: 'boolean',
+          description: 'Enable batch mode to get metadata for all notes',
+          default: false
+        },
+        directory: {
+          type: 'string',
+          description: 'In batch mode, limit to specific directory',
+        },
+      },
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      oneOf: [
+        {
+          // Single note response
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'Path to the note'
+            },
+            frontmatter: {
+              type: 'object',
+              description: 'Parsed frontmatter metadata'
+            },
+            title: {
+              type: ['string', 'null'],
+              description: 'H1 title from content'
+            },
+            titleLine: {
+              type: ['integer', 'null'],
+              description: 'Line number of title'
+            },
+            hasContent: {
+              type: 'boolean',
+              description: 'Whether note has content'
+            },
+            contentLength: {
+              type: 'integer',
+              description: 'Total content length'
+            },
+            contentPreview: {
+              type: 'string',
+              description: 'Preview of content'
+            },
+            inlineTags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Inline tags found in content'
+            }
+          },
+          required: ['path', 'frontmatter', 'hasContent', 'contentLength', 'contentPreview', 'inlineTags'],
+          additionalProperties: false
+        },
+        {
+          // Batch mode response
+          type: 'object',
+          properties: {
+            notes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  path: { type: 'string' },
+                  frontmatter: { type: 'object' },
+                  title: { type: ['string', 'null'] },
+                  titleLine: { type: ['integer', 'null'] },
+                  hasContent: { type: 'boolean' },
+                  contentLength: { type: 'integer' },
+                  contentPreview: { type: 'string' },
+                  inlineTags: { type: 'array', items: { type: 'string' } }
+                }
+              }
+            },
+            count: {
+              type: 'integer',
+              description: 'Number of notes processed'
+            },
+            errors: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string' },
+                  error: { type: 'string' }
+                }
+              }
+            }
+          },
+          required: ['notes', 'count', 'errors'],
+          additionalProperties: false
+        }
+      ]
     }
   },
 ];

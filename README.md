@@ -99,6 +99,14 @@ Search for content across all notes in your vault.
 - Returns line numbers and matched content
 - Optional path filtering
 
+### search-by-title
+Search for notes by their H1 title (# Title).
+- Fast title-based search
+- Case-sensitive/insensitive matching
+- Returns title, file path, and line number
+- Optional path filtering
+- Only matches H1 headings (single #)
+
 ### list-notes
 List all markdown files in your vault or a specific directory.
 - Returns file paths and total count
@@ -125,6 +133,14 @@ Find notes containing specific tags.
 - Supports both YAML frontmatter and inline #tags
 - AND operation for multiple tags
 - Case-sensitive/insensitive matching
+
+### get-note-metadata
+Get metadata for one or all notes without reading full content.
+- Single note mode: Get metadata for a specific note
+- Batch mode: Get metadata for all notes in vault
+- Extracts frontmatter, title, tags, and content preview
+- Lightweight alternative to reading full notes
+- Useful for building note indexes or dashboards
 
 ## Security Features
 

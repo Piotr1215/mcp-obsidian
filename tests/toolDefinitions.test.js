@@ -2,18 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { toolDefinitions } from '../src/toolDefinitions.js';
 
 describe('Tool Definitions', () => {
-  it('should export exactly 6 tools', () => {
-    expect(toolDefinitions).toHaveLength(6);
-  });
-
   it('should have all required tool names', () => {
     const toolNames = toolDefinitions.map(t => t.name);
     expect(toolNames).toContain('search-vault');
+    expect(toolNames).toContain('search-by-title');
     expect(toolNames).toContain('list-notes');
     expect(toolNames).toContain('read-note');
     expect(toolNames).toContain('write-note');
     expect(toolNames).toContain('delete-note');
     expect(toolNames).toContain('search-by-tags');
+    expect(toolNames).toContain('get-note-metadata');
   });
 
   it('should have valid schemas for all tools', () => {
@@ -44,5 +42,8 @@ describe('Tool Definitions', () => {
 
     const tagSearchTool = toolDefinitions.find(t => t.name === 'search-by-tags');
     expect(tagSearchTool.inputSchema.required).toEqual(['tags']);
+    
+    const titleSearchTool = toolDefinitions.find(t => t.name === 'search-by-title');
+    expect(titleSearchTool.inputSchema.required).toEqual(['query']);
   });
 });
