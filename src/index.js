@@ -16,4 +16,4 @@ const server = createServer(vaultPath);
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-console.error(`Obsidian MCP Server running for vault: ${vaultPath}`);
+// console.error(`Obsidian MCP Server running for vault: ${vaultPath}`);

@@ -394,87 +394,75 @@ export const toolDefinitions = [
     },
     outputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
-      oneOf: [
-        {
-          // Single note response
-          type: 'object',
-          properties: {
-            path: {
-              type: 'string',
-              description: 'Path to the note'
-            },
-            frontmatter: {
-              type: 'object',
-              description: 'Parsed frontmatter metadata'
-            },
-            title: {
-              type: ['string', 'null'],
-              description: 'H1 title from content'
-            },
-            titleLine: {
-              type: ['integer', 'null'],
-              description: 'Line number of title'
-            },
-            hasContent: {
-              type: 'boolean',
-              description: 'Whether note has content'
-            },
-            contentLength: {
-              type: 'integer',
-              description: 'Total content length'
-            },
-            contentPreview: {
-              type: 'string',
-              description: 'Preview of content'
-            },
-            inlineTags: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Inline tags found in content'
-            }
-          },
-          required: ['path', 'frontmatter', 'hasContent', 'contentLength', 'contentPreview', 'inlineTags'],
-          additionalProperties: false
+      type: 'object',
+      properties: {
+        // For single note mode
+        path: {
+          type: 'string',
+          description: 'Path to the note'
         },
-        {
-          // Batch mode response
+        frontmatter: {
           type: 'object',
-          properties: {
-            notes: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  path: { type: 'string' },
-                  frontmatter: { type: 'object' },
-                  title: { type: ['string', 'null'] },
-                  titleLine: { type: ['integer', 'null'] },
-                  hasContent: { type: 'boolean' },
-                  contentLength: { type: 'integer' },
-                  contentPreview: { type: 'string' },
-                  inlineTags: { type: 'array', items: { type: 'string' } }
-                }
-              }
-            },
-            count: {
-              type: 'integer',
-              description: 'Number of notes processed'
-            },
-            errors: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  file: { type: 'string' },
-                  error: { type: 'string' }
-                }
-              }
+          description: 'Parsed frontmatter metadata'
+        },
+        title: {
+          type: ['string', 'null'],
+          description: 'H1 title from content'
+        },
+        titleLine: {
+          type: ['integer', 'null'],
+          description: 'Line number of title'
+        },
+        hasContent: {
+          type: 'boolean',
+          description: 'Whether note has content'
+        },
+        contentLength: {
+          type: 'integer',
+          description: 'Total content length'
+        },
+        contentPreview: {
+          type: 'string',
+          description: 'Preview of content'
+        },
+        inlineTags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Inline tags found in content'
+        },
+        // For batch mode
+        notes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              frontmatter: { type: 'object' },
+              title: { type: ['string', 'null'] },
+              titleLine: { type: ['integer', 'null'] },
+              hasContent: { type: 'boolean' },
+              contentLength: { type: 'integer' },
+              contentPreview: { type: 'string' },
+              inlineTags: { type: 'array', items: { type: 'string' } }
             }
-          },
-          required: ['notes', 'count', 'errors'],
-          additionalProperties: false
+          }
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of notes processed'
+        },
+        errors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              file: { type: 'string' },
+              error: { type: 'string' }
+            }
+          }
         }
-      ]
+      },
+      additionalProperties: false
     }
   },
 ];
