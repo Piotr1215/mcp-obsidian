@@ -2,11 +2,20 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
 import { textResponse, structuredResponse, errorResponse, createMetadata } from './response-formatter.js';
+import { glob } from 'glob';
+import path from 'path';
+import { readFile } from 'fs/promises';
+import { createNoteResource } from './resourceDefinitions.js';
+import { validatePathWithinBase, validateRequiredParameters } from './validation.js';
+import { createNoteResourceLink, createContentWithLinks } from './resource-links.js';
+import { multiContentResponse } from './response-formatter.js';
 
 export function createServer(vaultPath) {
   const server = new Server(
@@ -20,8 +29,11 @@ export function createServer(vaultPath) {
           // We don't support dynamic tool list changes
           listChanged: false
         },
+        resources: {
+          // We support resources for notes
+          listChanged: false
+        },
         // We could add these in the future:
-        // resources: {},
         // prompts: {},
         // logging: {},
         // completions: {}
@@ -77,12 +89,28 @@ export function createServer(vaultPath) {
           });
         }
         
+        // Create resource links for all found files
+        const resourceLinks = result.files.map(file => 
+          createNoteResourceLink(vaultPath, file.path, {
+            matchCount: file.matchCount,
+            title: file.title,
+            tags: file.tags
+          })
+        );
+        
         const metadata = createMetadata(startTime, { 
           tool: 'search-vault',
           filesSearched: result.filesSearched || 0
         });
         
-        return structuredResponse(result, description, metadata);
+        // Create content array with text and resource links
+        const content = createContentWithLinks(description, resourceLinks);
+        
+        return {
+          content,
+          structuredContent: result,
+          _meta: metadata
+        };
       }
 
       case 'search-by-title': {
@@ -93,12 +121,26 @@ export function createServer(vaultPath) {
           ? `No notes found with title matching "${query}"`
           : `Found ${result.count} notes with title matching "${query}"`;
         
+        // Create resource links for found notes
+        const resourceLinks = result.notes.map(note => 
+          createNoteResourceLink(vaultPath, note.path, {
+            title: note.title,
+            tags: note.tags
+          })
+        );
+        
         const metadata = createMetadata(startTime, { 
           tool: 'search-by-title',
           filesSearched: result.filesSearched || 0
         });
         
-        return structuredResponse(result, description, metadata);
+        const content = createContentWithLinks(description, resourceLinks);
+        
+        return {
+          content,
+          structuredContent: result,
+          _meta: metadata
+        };
       }
 
       case 'list-notes': {
@@ -109,8 +151,19 @@ export function createServer(vaultPath) {
           ? `No notes found${directory ? ` in ${directory}` : ''}`
           : `Found ${result.count} notes${directory ? ` in ${directory}` : ''}`;
         
+        // Create resource links for all notes
+        const resourceLinks = result.notes.map(notePath => 
+          createNoteResourceLink(vaultPath, notePath, {})
+        );
+        
         const metadata = createMetadata(startTime, { tool: 'list-notes' });
-        return structuredResponse(result, description, metadata);
+        const content = createContentWithLinks(description, resourceLinks);
+        
+        return {
+          content,
+          structuredContent: result,
+          _meta: metadata
+        };
       }
 
       case 'read-note': {
@@ -153,11 +206,25 @@ export function createServer(vaultPath) {
           ? `No notes found with tags: ${tagList}`
           : `Found ${result.count} notes with tags: ${tagList}`;
         
+        // Create resource links with tag context
+        const resourceLinks = result.notes.map(note => 
+          createNoteResourceLink(vaultPath, note.path, {
+            title: note.title,
+            tags: note.tags
+          })
+        );
+        
         const metadata = createMetadata(startTime, { 
           tool: 'search-by-tags',
           tagsSearched: tags.length 
         });
-        return structuredResponse(result, description, metadata);
+        const content = createContentWithLinks(description, resourceLinks);
+        
+        return {
+          content,
+          structuredContent: result,
+          _meta: metadata
+        };
       }
 
       case 'get-note-metadata': {
@@ -168,6 +235,8 @@ export function createServer(vaultPath) {
         const result = await getNoteMetadata(vaultPath, pathArg, { batch });
         
         let description;
+        let resourceLinks = [];
+        
         if (batch) {
           description = result.count === 0
             ? 'No notes found'
@@ -175,8 +244,24 @@ export function createServer(vaultPath) {
           if (result.errors && result.errors.length > 0) {
             description += ` (${result.errors.length} errors)`;
           }
+          
+          // Create resource links for batch mode
+          if (result.notes) {
+            resourceLinks = result.notes.map(note => 
+              createNoteResourceLink(vaultPath, note.path, {
+                title: note.metadata.title,
+                tags: note.metadata.tags
+              })
+            );
+          }
         } else {
           description = `Retrieved metadata for: ${notePath}`;
+          
+          // Create single resource link for single mode
+          resourceLinks = [createNoteResourceLink(vaultPath, notePath, {
+            title: result.title,
+            tags: result.tags
+          })];
         }
         
         const metadata = createMetadata(startTime, { 
@@ -184,7 +269,13 @@ export function createServer(vaultPath) {
           mode: batch ? 'batch' : 'single'
         });
         
-        return structuredResponse(result, description, metadata);
+        const content = createContentWithLinks(description, resourceLinks);
+        
+        return {
+          content,
+          structuredContent: result,
+          _meta: metadata
+        };
       }
 
       default:
@@ -198,6 +289,52 @@ export function createServer(vaultPath) {
       
       // For tool execution errors, return with isError flag
       return errorResponse(error);
+    }
+  });
+
+  // List available resources (all notes in vault)
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    try {
+      const notes = await glob(path.join(vaultPath, '**/*.md'));
+      
+      // Process in parallel for performance
+      const resources = await Promise.all(
+        notes.map(notePath => createNoteResource(vaultPath, notePath))
+      );
+      
+      return { resources };
+    } catch (error) {
+      return { resources: [] };
+    }
+  });
+
+  // Read a specific resource
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params;
+    
+    if (!uri.startsWith('obsidian-note://')) {
+      throw new Error(`Unknown resource URI: ${uri}`);
+    }
+    
+    const relativePath = uri.replace('obsidian-note://', '');
+    const fullPath = path.join(vaultPath, relativePath);
+    
+    // Validate path
+    const pathValidation = validatePathWithinBase(vaultPath, fullPath);
+    if (!pathValidation.valid) {
+      throw Errors.accessDenied(pathValidation.error, { path: fullPath });
+    }
+    
+    try {
+      const content = await readFile(fullPath, 'utf-8');
+      
+      return {
+        uri,
+        mimeType: 'text/markdown',
+        text: content
+      };
+    } catch (error) {
+      throw Errors.fileNotFound(fullPath);
     }
   });
 

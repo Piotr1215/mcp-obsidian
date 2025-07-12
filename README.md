@@ -22,10 +22,12 @@ This server instead works directly with Obsidian vault files on disk, making it 
 - **High performance** with execution time tracking and resource limits
 - **Rich search capabilities** including regex support and tag-based search
 - **Metadata support** with frontmatter and inline tag parsing
+- **MCP Resources** for HATEOAS-style discovery and navigation
 
 ## Recent Updates
 
 ### 🎉 New Features 
+- **Resource Links**: Search results now include MCP resource links for direct note access
 - **Context Snippets in Search Results**: Search results now include surrounding lines for better context understanding
 - **Match Highlighting**: Search terms are highlighted with **bold** markers in results
 - **Improved Search Result Structure**: Results are now grouped by file with match counts and snippets
@@ -108,8 +110,9 @@ Search for content across all notes in your vault.
 - Quoted phrases: `"exact phrase"`
 - Grouping with parentheses: `(term1 OR term2) AND term3`
 - Case-sensitive/insensitive search
-- **Context snippets** (NEW): See surrounding lines for each match
-- **Match highlighting** (NEW): Search terms are highlighted with **bold**
+- **Context snippets**: See surrounding lines for each match
+- **Match highlighting**: Search terms are highlighted with **bold**
+- **Resource links**: Results include MCP resource links for direct note access
 - Returns grouped results by file with match counts
 - Optional path filtering
 
@@ -154,12 +157,14 @@ Search for notes by their H1 title (# Title).
 - Fast title-based search
 - Case-sensitive/insensitive matching
 - Returns title, file path, and line number
+- **Resource links**: Results include MCP resource links for direct note access
 - Optional path filtering
 - Only matches H1 headings (single #)
 
 ### list-notes
 List all markdown files in your vault or a specific directory.
 - Returns file paths and total count
+- **Resource links**: Results include MCP resource links for direct note access
 - Supports directory filtering
 
 ### read-note
@@ -182,6 +187,7 @@ Delete a note from your vault.
 Find notes containing specific tags.
 - Supports both YAML frontmatter and inline #tags
 - AND operation for multiple tags
+- **Resource links**: Results include MCP resource links for direct note access
 - Case-sensitive/insensitive matching
 
 ### get-note-metadata
@@ -189,8 +195,38 @@ Get metadata for one or all notes without reading full content.
 - Single note mode: Get metadata for a specific note
 - Batch mode: Get metadata for all notes in vault
 - Extracts frontmatter, title, tags, and content preview
+- **Resource links**: Results include MCP resource links for direct note access
 - Lightweight alternative to reading full notes
 - Useful for building note indexes or dashboards
+
+## MCP Resources
+
+This server implements MCP resource support for HATEOAS-style discovery:
+
+- **Automatic Resource Links**: All search and list tools return resource links
+- **Direct Note Access**: Use resource URIs to read notes without searching
+- **Resource URI Format**: `obsidian-note://relative/path/to/note.md`
+- **Rich Metadata**: Resource links include tags, titles, and match counts
+
+**Example**: When you search for "MCP", results include resource links:
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Found 5 matches in 2 files for \"MCP\""
+    },
+    {
+      "type": "resource_link",
+      "uri": "obsidian-note://guides/MCP-Guide.md",
+      "name": "MCP Implementation Guide",
+      "description": "3 matches | Tags: mcp, guide, development"
+    }
+  ]
+}
+```
+
+Agents can then directly read the note using the resource URI, enabling seamless navigation through your knowledge base.
 
 ## Security Features
 

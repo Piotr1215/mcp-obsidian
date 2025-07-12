@@ -68,7 +68,7 @@ export function errorResponse(error) {
 }
 
 /**
- * Creates a resource link response
+ * Creates a resource link content item
  * @param {string} uri - The resource URI
  * @param {string} name - The resource name
  * @param {string} [description] - Optional description
