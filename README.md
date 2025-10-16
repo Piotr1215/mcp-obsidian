@@ -26,7 +26,8 @@ This server instead works directly with Obsidian vault files on disk, making it 
 
 ## Recent Updates
 
-### 🎉 New Features 
+### 🎉 New Features
+- **🗺️ MOC Discovery**: New `discover-mocs` tool provides a high-level map of your vault's knowledge structure by discovering Maps of Content and their relationships. **Start here for 10x faster navigation!**
 - **Resource Links**: Search results now include MCP resource links for direct note access
 - **Context Snippets in Search Results**: Search results now include surrounding lines for better context understanding
 - **Match Highlighting**: Search terms are highlighted with **bold** markers in results
@@ -198,6 +199,42 @@ Get metadata for one or all notes without reading full content.
 - **Resource links**: Results include MCP resource links for direct note access
 - Lightweight alternative to reading full notes
 - Useful for building note indexes or dashboards
+
+### discover-mocs
+**⭐ RECOMMENDED: Start here!** Discover MOCs (Maps of Content) to understand your vault's knowledge structure.
+
+[Maps of Content](https://notes.linkingyourthinking.com/Cards/MOCs+Overview) are organizational hub notes (tagged with `#moc`) that link to related content. They were pioneered by [Nick Milo](https://www.linkingyourthinking.com/) as a flexible alternative to rigid folder structures.
+
+**Features:**
+- Lists all MOCs in your vault with their linked notes
+- Shows MOC hierarchy (which MOCs link to other MOCs)
+- Displays full list of wikilinks from each MOC
+- **Provides a high-level map** of your vault's organization
+- **10x faster navigation** - understand structure before searching
+- Filter by MOC name or directory
+
+**Why use MOCs?**
+- **Context**: See what knowledge areas exist in your vault
+- **Scale**: Understand how developed each area is
+- **Relationships**: Discover how topics connect through MOC hierarchy
+- **Entry points**: Find the best starting point for exploration
+
+**Example Output:**
+```
+Found 10 MOCs
+
+📚 Vault Index (24 linked notes)
+   Path: 00-INDEX.md
+   Links: Work-MOC, AI-MOC, Development-MOC, DevOps-MOC, Tools-MOC, Personal-MOC, Homelab-MOC, MCP-Framework-MOC
+   🔗 Links to MOCs: Work-MOC, AI-MOC, Development-MOC, DevOps-MOC, Tools-MOC, Personal-MOC, Homelab-MOC, MCP-Framework-MOC
+
+📚 AI-MOC (61 linked notes)
+   Path: _mocs/AI-MOC.md
+   Links: chatgpt, ollama, langchain, aider, gp-nvim, MCP-Framework-MOC, ...
+   🔗 Links to MOCs: MCP-Framework-MOC, Development-MOC, DevOps-MOC, Tools-MOC, Work-MOC, 00-INDEX
+```
+
+This tool enables agents to understand your knowledge graph structure instantly, making navigation ~10x faster than blind keyword searching.
 
 ## MCP Resources
 

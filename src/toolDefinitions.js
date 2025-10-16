@@ -465,4 +465,82 @@ export const toolDefinitions = [
       additionalProperties: false
     }
   },
+  {
+    name: 'discover-mocs',
+    title: 'Discover MOCs',
+    description: 'RECOMMENDED: Start here to explore the vault! Discover MOCs (Maps of Content) - organizational hub notes tagged with #moc that link to related content. MOCs provide a high-level map of the vault\'s knowledge structure. Use this tool first to understand how notes are organized, then drill down into specific areas of interest.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        mocName: {
+          type: 'string',
+          description: 'Filter by specific MOC name (optional)',
+        },
+        directory: {
+          type: 'string',
+          description: 'Limit search to specific directory (optional)',
+        },
+      },
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        mocs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'Path to the MOC relative to vault root'
+              },
+              title: {
+                type: 'string',
+                description: 'H1 title of the MOC'
+              },
+              tags: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                description: 'All tags found in the MOC'
+              },
+              linkedNotes: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                description: 'Array of note names linked from this MOC (wikilinks)'
+              },
+              linkCount: {
+                type: 'integer',
+                description: 'Number of linked notes',
+                minimum: 0
+              },
+              linkedMocs: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                description: 'Array of linked notes that are themselves MOCs (subset of linkedNotes)'
+              }
+            },
+            required: ['path', 'title', 'tags', 'linkedNotes', 'linkCount', 'linkedMocs'],
+            additionalProperties: false
+          },
+          description: 'List of discovered MOCs with their linked notes'
+        },
+        count: {
+          type: 'integer',
+          description: 'Total number of MOCs found',
+          minimum: 0
+        }
+      },
+      required: ['mocs', 'count'],
+      additionalProperties: false
+    }
+  },
 ];

@@ -10,6 +10,7 @@ import { findMatchesInContent, findMatchesWithOperators, transformSearchResults,
 import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
 import { extractH1Title, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
+import { extractWikilinks, isMoc } from './links.js';
 import { 
   validatePathWithinBase, 
   validateMarkdownExtension, 
@@ -409,6 +410,107 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
   
   // Pure: Transform results
   return transformBatchMetadata(metadataResults, vaultPath);
+}
+
+/**
+ * Discover MOCs (Maps of Content) in the vault with their linked notes
+ * @param {string} vaultPath - The vault base path
+ * @param {object} options - Discovery options
+ * @param {string} options.mocName - Filter by specific MOC name (optional)
+ * @param {string} options.directory - Limit search to specific directory (optional)
+ * @returns {Promise<object>} MOCs with their metadata and linked notes
+ */
+export async function discoverMocs(vaultPath, options = {}) {
+  const { mocName, directory } = options;
+
+  // Validate directory path if provided
+  if (directory) {
+    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
+  }
+
+  // I/O: Get all markdown files
+  const searchPattern = directory
+    ? path.join(vaultPath, directory, '**/*.md')
+    : path.join(vaultPath, '**/*.md');
+
+  const files = await glob(searchPattern);
+
+  // Process files to find MOCs
+  const mocs = [];
+
+  for (const file of files) {
+    try {
+      // Filter by MOC name if specified
+      if (mocName) {
+        const filename = path.basename(file, '.md');
+        if (filename !== mocName && !file.includes(`/${mocName}.md`)) {
+          continue;
+        }
+      }
+
+      // I/O: Check file size
+      const stats = await stat(file);
+      const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
+
+      if (!sizeValidation.valid) {
+        continue; // Skip large files
+      }
+
+      // I/O: Read file
+      const content = await readFile(file, 'utf-8');
+
+      // Pure: Extract metadata
+      const tags = extractTagsPure(content);
+
+      // Pure: Check if this is a MOC
+      if (!isMoc(content, tags)) {
+        continue; // Skip non-MOC files
+      }
+
+      // Pure: Extract title and wikilinks
+      const titleData = extractH1Title(content);
+      const linkedNotes = extractWikilinks(content);
+
+      // Build MOC entry
+      const relativePath = path.relative(vaultPath, file);
+      const moc = {
+        path: relativePath,
+        title: titleData ? titleData.title : path.basename(file, '.md'),
+        tags: tags,
+        linkedNotes: linkedNotes,
+        linkCount: linkedNotes.length
+      };
+
+      mocs.push(moc);
+    } catch (error) {
+      // Skip files with read errors
+      continue;
+    }
+  }
+
+  // Detect MOC hierarchy: find which linked notes are themselves MOCs
+  const mocPaths = new Set(mocs.map(m => {
+    // Extract just the note name (without .md extension) for matching
+    const baseName = path.basename(m.path, '.md');
+    return baseName;
+  }));
+
+  // For each MOC, check if any of its linked notes are also MOCs
+  mocs.forEach(moc => {
+    const linkedMocs = moc.linkedNotes.filter(linkedNote => {
+      // Extract just the note name from the link (handle nested paths)
+      const linkedBaseName = path.basename(linkedNote, '.md');
+      return mocPaths.has(linkedBaseName);
+    });
+
+    moc.linkedMocs = linkedMocs;
+  });
+
+  return {
+    mocs: mocs,
+    count: mocs.length
+  };
 }
 
 // Re-export the pure extractTags function for backward compatibility

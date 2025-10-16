@@ -5,7 +5,7 @@ import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata } from './tools.js';
+import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
 import { textResponse, structuredResponse, errorResponse, createMetadata } from './response-formatter.js';
@@ -229,14 +229,14 @@ export function createServer(vaultPath) {
 
       case 'get-note-metadata': {
         const { path: notePath, batch = false, directory } = args;
-        
+
         // In batch mode with directory, pass directory as the path
         const pathArg = batch && directory ? directory : notePath;
         const result = await getNoteMetadata(vaultPath, pathArg, { batch });
-        
+
         let description;
         let resourceLinks = [];
-        
+
         if (batch) {
           description = result.count === 0
             ? 'No notes found'
@@ -244,10 +244,10 @@ export function createServer(vaultPath) {
           if (result.errors && result.errors.length > 0) {
             description += ` (${result.errors.length} errors)`;
           }
-          
+
           // Create resource links for batch mode
           if (result.notes) {
-            resourceLinks = result.notes.map(note => 
+            resourceLinks = result.notes.map(note =>
               createNoteResourceLink(vaultPath, note.path, {
                 title: note.metadata.title,
                 tags: note.metadata.tags
@@ -256,21 +256,75 @@ export function createServer(vaultPath) {
           }
         } else {
           description = `Retrieved metadata for: ${notePath}`;
-          
+
           // Create single resource link for single mode
           resourceLinks = [createNoteResourceLink(vaultPath, notePath, {
             title: result.title,
             tags: result.tags
           })];
         }
-        
-        const metadata = createMetadata(startTime, { 
+
+        const metadata = createMetadata(startTime, {
           tool: 'get-note-metadata',
           mode: batch ? 'batch' : 'single'
         });
-        
+
         const content = createContentWithLinks(description, resourceLinks);
-        
+
+        return {
+          content,
+          structuredContent: result,
+          _meta: metadata
+        };
+      }
+
+      case 'discover-mocs': {
+        const { mocName, directory } = args;
+        const result = await discoverMocs(vaultPath, { mocName, directory });
+
+        let description = result.count === 0
+          ? 'No MOCs found'
+          : `Found ${result.count} MOCs`;
+
+        if (mocName) {
+          description += ` matching "${mocName}"`;
+        }
+        if (directory) {
+          description += ` in ${directory}`;
+        }
+
+        // Add MOC details to description
+        if (result.mocs.length > 0) {
+          description += '\n\n';
+          result.mocs.forEach(moc => {
+            description += `📚 ${moc.title} (${moc.linkCount} linked notes)\n`;
+            description += `   Path: ${moc.path}\n`;
+            if (moc.linkedNotes.length > 0) {
+              description += `   Links: ${moc.linkedNotes.join(', ')}\n`;
+            }
+            if (moc.linkedMocs && moc.linkedMocs.length > 0) {
+              description += `   🔗 Links to MOCs: ${moc.linkedMocs.join(', ')}\n`;
+            }
+            description += '\n';
+          });
+        }
+
+        // Create resource links for MOCs
+        const resourceLinks = result.mocs.map(moc =>
+          createNoteResourceLink(vaultPath, moc.path, {
+            title: moc.title,
+            tags: moc.tags
+          })
+        );
+
+        const metadata = createMetadata(startTime, {
+          tool: 'discover-mocs',
+          mocsFound: result.count,
+          totalLinkedNotes: result.mocs.reduce((sum, moc) => sum + moc.linkCount, 0)
+        });
+
+        const content = createContentWithLinks(description, resourceLinks);
+
         return {
           content,
           structuredContent: result,

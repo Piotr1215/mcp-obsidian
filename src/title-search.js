@@ -18,7 +18,9 @@ export function extractH1Title(content) {
     const line = lines[i].trim();
     // Match H1 heading: starts with single # followed by space
     if (line.match(/^#\s+(.+)$/)) {
-      const title = line.substring(2).trim();
+      let title = line.substring(2).trim();
+      // Strip inline tags from the end of the title (e.g., "Title #tag" -> "Title")
+      title = title.replace(/\s+#\w+(\s+#\w+)*$/, '').trim();
       return {
         title,
         line: i + 1
