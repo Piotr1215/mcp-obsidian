@@ -2,14 +2,14 @@ export const toolDefinitions = [
   {
     name: 'search-vault',
     title: 'Search Vault',
-    description: 'Search for content in Obsidian vault notes. Supports boolean operators (AND, OR, NOT), field specifiers (title:, content:, tag:), quoted phrases, and parentheses for grouping. Examples: "term1 AND term2", "title:readme OR tag:important", "(term1 OR term2) AND -deprecated"',
+    description: 'Search for content in Obsidian vault notes. CRITICAL: Multiple space-separated terms default to AND (all required). Use OR for better results: "git OR repository OR backup" finds notes with ANY term. Search progressively: start broad (single key term), then narrow down. Don\'t give up after one try! Supports: boolean operators (AND, OR, NOT), field specifiers (title:, content:, tag:), quoted phrases, parentheses. Examples: "kubernetes OR k8s" (broad), "git OR mirror OR backup" (any match), "title:readme OR tag:important", "(docker OR podman) AND deployment"',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Search query. Supports: AND/OR/NOT operators, field specifiers (title:, content:, tag:), quoted phrases, parentheses for grouping',
+          description: 'Search query. IMPORTANT: Space-separated terms are AND by default (all required). Use OR for broader results: "git OR backup OR mirror". Start with single terms or OR queries, then narrow down. Supports: AND/OR/NOT operators, field specifiers (title:, content:, tag:), quoted phrases, parentheses for grouping',
           minLength: 1
         },
         path: {
