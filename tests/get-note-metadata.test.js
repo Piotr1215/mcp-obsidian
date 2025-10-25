@@ -192,16 +192,17 @@ This note has #inline-tag and #another-tag in the content.`;
       '/test/vault/good.md',
       '/test/vault/bad.md'
     ];
-    
+
     glob.mockResolvedValue(mockFiles);
     stat.mockResolvedValue({ size: 1024 });
-    
+
+    // After sorting: bad.md comes before good.md
     readFile
-      .mockResolvedValueOnce('# Good Note')
-      .mockRejectedValueOnce(new Error('Permission denied'));
-    
+      .mockRejectedValueOnce(new Error('Permission denied'))
+      .mockResolvedValueOnce('# Good Note');
+
     const result = await getNoteMetadata(mockVaultPath, null, { batch: true });
-    
+
     expect(result.notes).toHaveLength(1);
     expect(result.notes[0].title).toBe('Good Note');
     expect(result.errors).toHaveLength(1);

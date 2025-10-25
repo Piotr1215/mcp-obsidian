@@ -89,24 +89,5 @@ describe('File Size Limits', () => {
       expect(result.files[0].path).toBe('normal.md');
     });
 
-    it('should limit search results to prevent memory issues', async () => {
-      // Create files with many matches
-      const contentWithManyMatches = Array(100).fill('match line').join('\n');
-      
-      // Create multiple files to exceed the limit
-      const filesNeeded = Math.ceil(config.limits.maxSearchResults / 100) + 1;
-      for (let i = 0; i < filesNeeded; i++) {
-        await writeFile(
-          path.join(testVault, `file${i}.md`), 
-          contentWithManyMatches
-        );
-      }
-      
-      const result = await searchVault(testVault, 'match');
-      
-      expect(result.totalMatches).toBe(config.limits.maxSearchResults);
-      expect(result.truncated).toBe(true);
-      expect(result.message).toMatch(/Results limited to/);
-    });
   });
 });

@@ -32,6 +32,19 @@ export const toolDefinitions = [
           default: 2,
           minimum: 0,
           maximum: 10
+        },
+        limit: {
+          type: 'integer',
+          description: 'Maximum number of matches to return (default: 100)',
+          default: 100,
+          minimum: 1,
+          maximum: 500
+        },
+        offset: {
+          type: 'integer',
+          description: 'Number of matches to skip for pagination (default: 0)',
+          default: 0,
+          minimum: 0
         }
       },
       required: ['query'],
@@ -127,9 +140,40 @@ export const toolDefinitions = [
           type: 'integer',
           description: 'Total number of files searched',
           minimum: 0
+        },
+        pagination: {
+          type: 'object',
+          description: 'Pagination metadata for iterating through results',
+          properties: {
+            total: {
+              type: 'integer',
+              description: 'Total number of matches across all pages',
+              minimum: 0
+            },
+            returned: {
+              type: 'integer',
+              description: 'Number of matches returned in this response',
+              minimum: 0
+            },
+            limit: {
+              type: 'integer',
+              description: 'Limit parameter used for this request',
+              minimum: 1
+            },
+            offset: {
+              type: 'integer',
+              description: 'Offset parameter used for this request',
+              minimum: 0
+            },
+            hasMore: {
+              type: 'boolean',
+              description: 'Whether there are more results available'
+            }
+          },
+          required: ['total', 'returned', 'limit', 'offset', 'hasMore']
         }
       },
-      required: ['files', 'totalMatches', 'fileCount', 'filesSearched'],
+      required: ['files', 'totalMatches', 'fileCount', 'filesSearched', 'pagination'],
       additionalProperties: false
     }
   },
@@ -155,6 +199,19 @@ export const toolDefinitions = [
           description: 'Case sensitive search (default: false)',
           default: false
         },
+        limit: {
+          type: 'integer',
+          description: 'Maximum number of results to return (default: 100)',
+          default: 100,
+          minimum: 1,
+          maximum: 1000
+        },
+        offset: {
+          type: 'integer',
+          description: 'Number of results to skip for pagination (default: 0)',
+          default: 0,
+          minimum: 0
+        }
       },
       required: ['query'],
       additionalProperties: false
@@ -195,9 +252,40 @@ export const toolDefinitions = [
           type: 'integer',
           description: 'Number of files searched',
           minimum: 0
+        },
+        pagination: {
+          type: 'object',
+          description: 'Pagination metadata',
+          properties: {
+            total: {
+              type: 'integer',
+              description: 'Total number of results across all pages',
+              minimum: 0
+            },
+            returned: {
+              type: 'integer',
+              description: 'Number of results returned in this response',
+              minimum: 0
+            },
+            limit: {
+              type: 'integer',
+              description: 'Limit parameter used',
+              minimum: 1
+            },
+            offset: {
+              type: 'integer',
+              description: 'Offset parameter used',
+              minimum: 0
+            },
+            hasMore: {
+              type: 'boolean',
+              description: 'Whether there are more results available'
+            }
+          },
+          required: ['total', 'returned', 'limit', 'offset', 'hasMore']
         }
       },
-      required: ['results', 'count', 'filesSearched'],
+      required: ['results', 'count', 'filesSearched', 'pagination'],
       additionalProperties: false
     }
   },
@@ -213,6 +301,19 @@ export const toolDefinitions = [
           type: 'string',
           description: 'Directory path relative to vault root (optional)',
         },
+        limit: {
+          type: 'integer',
+          description: 'Maximum number of notes to return (default: 100)',
+          default: 100,
+          minimum: 1,
+          maximum: 1000
+        },
+        offset: {
+          type: 'integer',
+          description: 'Number of notes to skip for pagination (default: 0)',
+          default: 0,
+          minimum: 0
+        }
       },
       additionalProperties: false
     },
@@ -232,9 +333,40 @@ export const toolDefinitions = [
           type: 'integer',
           description: 'Total number of notes found',
           minimum: 0
+        },
+        pagination: {
+          type: 'object',
+          description: 'Pagination metadata',
+          properties: {
+            total: {
+              type: 'integer',
+              description: 'Total number of notes across all pages',
+              minimum: 0
+            },
+            returned: {
+              type: 'integer',
+              description: 'Number of notes returned in this response',
+              minimum: 0
+            },
+            limit: {
+              type: 'integer',
+              description: 'Limit parameter used',
+              minimum: 1
+            },
+            offset: {
+              type: 'integer',
+              description: 'Offset parameter used',
+              minimum: 0
+            },
+            hasMore: {
+              type: 'boolean',
+              description: 'Whether there are more notes available'
+            }
+          },
+          required: ['total', 'returned', 'limit', 'offset', 'hasMore']
         }
       },
-      required: ['notes', 'count'],
+      required: ['notes', 'count', 'pagination'],
       additionalProperties: false
     }
   },
@@ -389,6 +521,19 @@ export const toolDefinitions = [
           type: 'string',
           description: 'In batch mode, limit to specific directory',
         },
+        limit: {
+          type: 'integer',
+          description: 'Maximum number of notes to return in batch mode (default: 50)',
+          default: 50,
+          minimum: 1,
+          maximum: 500
+        },
+        offset: {
+          type: 'integer',
+          description: 'Number of notes to skip for pagination in batch mode (default: 0)',
+          default: 0,
+          minimum: 0
+        }
       },
       additionalProperties: false
     },
@@ -460,6 +605,37 @@ export const toolDefinitions = [
               error: { type: 'string' }
             }
           }
+        },
+        pagination: {
+          type: 'object',
+          description: 'Pagination metadata for batch mode',
+          properties: {
+            total: {
+              type: 'integer',
+              description: 'Total number of notes across all pages',
+              minimum: 0
+            },
+            returned: {
+              type: 'integer',
+              description: 'Number of notes returned in this response',
+              minimum: 0
+            },
+            limit: {
+              type: 'integer',
+              description: 'Limit parameter used',
+              minimum: 1
+            },
+            offset: {
+              type: 'integer',
+              description: 'Offset parameter used',
+              minimum: 0
+            },
+            hasMore: {
+              type: 'boolean',
+              description: 'Whether there are more notes available'
+            }
+          },
+          required: ['total', 'returned', 'limit', 'offset', 'hasMore']
         }
       },
       additionalProperties: false

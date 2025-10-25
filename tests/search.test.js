@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   findMatchesInContent,
   transformSearchResults,
-  makeRelativePath,
-  limitSearchResults
+  makeRelativePath
 } from '../src/search.js';
 
 describe('Functional Search Utilities', () => {
@@ -118,80 +117,4 @@ describe('Functional Search Utilities', () => {
     });
   });
 
-  describe('limitSearchResults', () => {
-    const createResults = (count) => ({
-      files: Array(Math.ceil(count / 5)).fill(null).map((_, i) => ({
-        path: `file${i}.md`,
-        matchCount: Math.min(5, count - i * 5),
-        matches: Array(Math.min(5, count - i * 5)).fill(null).map((_, j) => ({
-          line: i * 5 + j + 1,
-          content: `Match ${i * 5 + j}`
-        }))
-      })),
-      totalMatches: count,
-      fileCount: Math.ceil(count / 5),
-      filesSearched: Math.ceil(count / 5)
-    });
-
-    it('should not limit results under threshold', () => {
-      const results = createResults(5);
-      const limited = limitSearchResults(results, 10);
-
-      expect(limited).toEqual(results);
-      expect(limited.truncated).toBeUndefined();
-    });
-
-    it('should limit results over threshold', () => {
-      const results = createResults(20);
-      const limited = limitSearchResults(results, 10);
-
-      expect(limited.totalMatches).toBe(10);
-      expect(limited.truncated).toBe(true);
-      expect(limited.message).toMatch(/limited to 10/);
-    });
-
-    it('should preserve first results when limiting', () => {
-      const results = createResults(5);
-      const limited = limitSearchResults(results, 3);
-
-      expect(limited.files[0].matches[0].content).toBe('Match 0');
-      expect(limited.files[0].matches[2].content).toBe('Match 2');
-    });
-
-    it('should enforce maxSearchResults limit of 100', () => {
-      const results = createResults(150);
-      const limited = limitSearchResults(results, 100);
-
-      // MUTATION FIX: Exact value prevents off-by-one mutations
-      expect(limited.totalMatches).toBe(100);
-      expect(limited.truncated).toBe(true);
-      expect(limited.message).toMatch(/limited to 100/);
-    });
-
-    it('should not truncate when results exactly at limit', () => {
-      const results = createResults(100);
-      const limited = limitSearchResults(results, 100);
-
-      // MUTATION FIX: Boundary test - 100 is NOT truncated, 101 is
-      expect(limited.totalMatches).toBe(100);
-      expect(limited.truncated).toBeUndefined();
-    });
-
-    it('preserves first N matches when limiting', () => {
-      const results = createResults(1000);
-      const limited = limitSearchResults(results, 100);
-
-      expect(limited.totalMatches).toBe(100);
-      expect(limited.truncated).toBe(true);
-
-      // MUTATION FIX: Verify slice(0, 100) not slice(arbitrary, arbitrary)
-      expect(limited.files[0].matches[0].content).toBe('Match 0');
-
-      // MUTATION FIX: Last preserved match is Match 99 (0-indexed)
-      const lastFileIndex = limited.files.length - 1;
-      const lastFile = limited.files[lastFileIndex];
-      const lastMatchInLastFile = lastFile.matches[lastFile.matches.length - 1];
-      expect(lastMatchInLastFile.content).toContain('Match');
-    });
-  });
 });

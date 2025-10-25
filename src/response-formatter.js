@@ -124,3 +124,35 @@ export function createMetadata(startTime, additional = {}) {
     ...additional
   };
 }
+
+/**
+ * Strips verbose context data from search results to reduce token usage
+ * Removes context.lines arrays while keeping essential match information
+ * @param {object} searchResults - The search results object
+ * @returns {object} Search results with context stripped
+ */
+export function stripSearchContext(searchResults) {
+  if (!searchResults || !searchResults.files) {
+    return searchResults;
+  }
+
+  return {
+    ...searchResults,
+    files: searchResults.files.map(file => ({
+      ...file,
+      matches: file.matches.map(match => {
+        // Remove context.lines array but keep highlighted snippet
+        if (match.context) {
+          return {
+            line: match.line,
+            content: match.content,
+            context: {
+              highlighted: match.context.highlighted
+            }
+          };
+        }
+        return match;
+      })
+    }))
+  };
+}

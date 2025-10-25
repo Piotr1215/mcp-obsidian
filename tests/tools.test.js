@@ -21,13 +21,14 @@ describe('Tools module', () => {
         '/test/vault/note1.md',
         '/test/vault/folder/note2.md'
       ];
-      
+
       glob.mockResolvedValue(mockFiles);
       // Mock file sizes to be within limit
       stat.mockResolvedValue({ size: 1024 }); // 1KB
+      // After sorting: folder/note2.md comes before note1.md
       readFile
-        .mockResolvedValueOnce('Line 1\nThis contains TEST\nLine 3')
-        .mockResolvedValueOnce('Another file\nWith TEST here\nAnd TEST again');
+        .mockResolvedValueOnce('Another file\nWith TEST here\nAnd TEST again')
+        .mockResolvedValueOnce('Line 1\nThis contains TEST\nLine 3');
 
       const result = await searchVault(mockVaultPath, 'test', null, false);
 
@@ -37,11 +38,14 @@ describe('Tools module', () => {
       expect(result.fileCount).toBe(2);
       expect(result.files).toHaveLength(2);
       expect(result.files[0]).toEqual({
-        path: 'note1.md',
-        matchCount: 1,
+        path: 'folder/note2.md',
+        matchCount: 2,
         matches: [{
           line: 2,
-          content: 'This contains TEST'
+          content: 'With TEST here'
+        }, {
+          line: 3,
+          content: 'And TEST again'
         }]
       });
     });

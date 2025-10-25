@@ -6,7 +6,7 @@ import { Errors, MCPError } from './errors.js';
 import { config } from './config.js';
 
 // Import pure functions
-import { findMatchesInContent, findMatchesWithOperators, transformSearchResults, limitSearchResults } from './search.js';
+import { findMatchesInContent, findMatchesWithOperators, transformSearchResults, paginateSearchResults, paginateArray } from './search.js';
 import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
 import { extractH1Title, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
@@ -32,60 +32,63 @@ function assertValid(validationResult, errorFactory) {
 /**
  * Search for content in vault (I/O function using pure functions)
  */
-export async function searchVault(vaultPath, query, searchPath, caseSensitive = false, contextOptions = {}) {
+export async function searchVault(vaultPath, query, searchPath, caseSensitive = false, contextOptions = {}, limit = 100, offset = 0) {
   // Validate using pure function
   const paramValidation = validateRequiredParameters({ query }, ['query']);
   assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
-  
+
   // Validate search path if provided
   if (searchPath) {
     const pathValidation = validatePathWithinBase(vaultPath, searchPath);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: searchPath }));
   }
-  
+
   // I/O: Get files
-  const searchPattern = searchPath 
+  const searchPattern = searchPath
     ? path.join(vaultPath, searchPath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
   const files = await glob(searchPattern);
-  
+
+  // Sort files for consistent pagination across requests
+  files.sort();
+
   // Process files with pure functions
   const fileMatches = [];
   const totalFiles = files.length;
-  
+
   for (const file of files) {
     try {
       // I/O: Check file size
       const stats = await stat(file);
       const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
-      
+
       if (!sizeValidation.valid) {
         continue; // Skip large files
       }
-      
+
       // I/O: Read file
       const content = await readFile(file, 'utf-8');
-      
+
       // Check if query contains operators
       const hasOperators = /\b(AND|OR|NOT)\b|[:\-()]|"/.test(query);
-      
+
       let matches;
       if (hasOperators) {
         // Extract metadata for operator-based search
         const titleData = extractH1Title(content);
         const tags = extractTagsPure(content);
-        const metadata = { 
-          title: titleData ? titleData.title : '', 
-          tags 
+        const metadata = {
+          title: titleData ? titleData.title : '',
+          tags
         };
-        
+
         // Use operator-based search
         matches = findMatchesWithOperators(content, query, metadata, caseSensitive, contextOptions);
       } else {
         // Use simple string matching for backward compatibility
         matches = findMatchesInContent(content, query, caseSensitive, contextOptions);
       }
-      
+
       if (matches.length > 0) {
         fileMatches.push({ file, matches });
       }
@@ -94,56 +97,59 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
       continue;
     }
   }
-  
-  // Pure: Transform and limit results
+
+  // Pure: Transform and paginate results
   const results = transformSearchResults(fileMatches, vaultPath);
-  return limitSearchResults(results, config.limits.maxSearchResults);
+  return paginateSearchResults(results, limit, offset);
 }
 
 /**
  * Search for notes by title (I/O function using pure functions)
  */
-export async function searchByTitle(vaultPath, query, searchPath, caseSensitive = false) {
+export async function searchByTitle(vaultPath, query, searchPath, caseSensitive = false, limit = 100, offset = 0) {
   // Validate using pure function
   const paramValidation = validateRequiredParameters({ query }, ['query']);
   assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
-  
+
   // Check for empty query
   if (!query || query.trim() === '') {
     throw Errors.invalidParams('query cannot be empty');
   }
-  
+
   // Validate search path if provided
   if (searchPath) {
     const pathValidation = validatePathWithinBase(vaultPath, searchPath);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: searchPath }));
   }
-  
+
   // I/O: Get files
-  const searchPattern = searchPath 
+  const searchPattern = searchPath
     ? path.join(vaultPath, searchPath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
   const files = await glob(searchPattern);
-  
+
+  // Sort files for consistent pagination across requests
+  files.sort();
+
   // Process files with pure functions
   const fileTitleMatches = [];
-  
+
   for (const file of files) {
     try {
       // I/O: Check file size
       const stats = await stat(file);
       const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
-      
+
       if (!sizeValidation.valid) {
         continue; // Skip large files
       }
-      
+
       // I/O: Read file
       const content = await readFile(file, 'utf-8');
-      
+
       // Pure: Extract title
       const titleInfo = extractH1Title(content);
-      
+
       if (titleInfo && titleMatchesQuery(titleInfo.title, query, caseSensitive)) {
         fileTitleMatches.push({ file, titleInfo });
       }
@@ -152,31 +158,43 @@ export async function searchByTitle(vaultPath, query, searchPath, caseSensitive 
       continue;
     }
   }
-  
-  // Pure: Transform results
-  return transformTitleResults(fileTitleMatches, vaultPath);
+
+  // Pure: Transform and paginate results
+  const transformedResults = transformTitleResults(fileTitleMatches, vaultPath);
+  const { items: paginatedResults, pagination } = paginateArray(transformedResults.results, limit, offset);
+
+  return {
+    results: paginatedResults,
+    count: paginatedResults.length,
+    filesSearched: files.length,
+    pagination
+  };
 }
 
 /**
  * List notes in vault (I/O function)
  */
-export async function listNotes(vaultPath, directory) {
+export async function listNotes(vaultPath, directory, limit = 100, offset = 0) {
   // Validate directory path if provided
   if (directory) {
     const pathValidation = validatePathWithinBase(vaultPath, directory);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
-  
-  const searchPath = directory 
+
+  const searchPath = directory
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
-  
+
   const files = await glob(searchPath);
-  const notes = files.map(file => path.relative(vaultPath, file)).sort();
-  
+  const allNotes = files.map(file => path.relative(vaultPath, file)).sort();
+
+  // Apply pagination
+  const { items: paginatedNotes, pagination } = paginateArray(allNotes, limit, offset);
+
   return {
-    notes,
-    count: notes.length
+    notes: paginatedNotes,
+    count: paginatedNotes.length,
+    pagination
   };
 }
 
@@ -304,11 +322,15 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
   
-  const searchPattern = directory 
+  const searchPattern = directory
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
-  
+
   const files = await glob(searchPattern);
+
+  // Sort files for consistent results
+  files.sort();
+
   const results = [];
   
   for (const file of files) {
@@ -341,54 +363,60 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
  * Get metadata for a note or multiple notes (I/O function using pure functions)
  */
 export async function getNoteMetadata(vaultPath, notePath, options = {}) {
-  const { batch = false } = options;
-  
+  const { batch = false, limit = 50, offset = 0 } = options;
+
   // Validate that we have either a path or batch mode
   if (!notePath && !batch) {
     throw Errors.invalidParams('Either path or batch mode must be specified');
   }
-  
+
   // Single note mode
   if (notePath && !batch) {
     // Validate path
     const pathValidation = validatePathWithinBase(vaultPath, notePath);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
-    
+
     const extensionValidation = validateMarkdownExtension(notePath);
     assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
-    
+
     const fullPath = path.join(vaultPath, notePath);
-    
+
     // I/O: Check file size
     const stats = await stat(fullPath);
     const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
-    assertValid(sizeValidation, (msg, data) => 
+    assertValid(sizeValidation, (msg, data) =>
       Errors.invalidParams(msg, { path: notePath, ...data }));
-    
+
     // I/O: Read file
     const content = await readFile(fullPath, 'utf-8');
-    
+
     // Pure: Extract metadata
     return extractNoteMetadata(content, notePath);
   }
-  
+
   // Batch mode
-  const searchPattern = notePath 
+  const searchPattern = notePath
     ? path.join(vaultPath, notePath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
-  
+
   // I/O: Get files
-  const files = await glob(searchPattern);
-  
-  // Process files
+  const allFiles = await glob(searchPattern);
+
+  // Sort files for consistent pagination across requests
+  allFiles.sort();
+
+  // Apply pagination to file list BEFORE processing
+  const { items: filesToProcess, pagination } = paginateArray(allFiles, limit, offset);
+
+  // Process paginated files
   const metadataResults = [];
-  
-  for (const file of files) {
+
+  for (const file of filesToProcess) {
     try {
       // I/O: Check file size
       const stats = await stat(file);
       const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
-      
+
       if (!sizeValidation.valid) {
         metadataResults.push({
           file,
@@ -396,10 +424,10 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
         });
         continue;
       }
-      
+
       // I/O: Read file
       const content = await readFile(file, 'utf-8');
-      
+
       // Pure: Extract metadata
       const metadata = extractNoteMetadata(content, path.relative(vaultPath, file));
       metadataResults.push({ file, metadata });
@@ -407,9 +435,14 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
       metadataResults.push({ file, error });
     }
   }
-  
-  // Pure: Transform results
-  return transformBatchMetadata(metadataResults, vaultPath);
+
+  // Pure: Transform results and add pagination
+  const transformedResults = transformBatchMetadata(metadataResults, vaultPath);
+
+  return {
+    ...transformedResults,
+    pagination
+  };
 }
 
 /**
@@ -435,6 +468,9 @@ export async function discoverMocs(vaultPath, options = {}) {
     : path.join(vaultPath, '**/*.md');
 
   const files = await glob(searchPattern);
+
+  // Sort files for consistent results
+  files.sort();
 
   // Process files to find MOCs
   const mocs = [];

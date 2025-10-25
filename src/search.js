@@ -8,6 +8,42 @@ import { extractTags } from './tags.js';
 import { extractContextLines, formatContextResult } from './search-context.js';
 
 /**
+ * Creates pagination metadata for a result set
+ * @param {number} total - Total number of items across all pages
+ * @param {number} returned - Number of items in this response
+ * @param {number} limit - Limit parameter used
+ * @param {number} offset - Offset parameter used
+ * @returns {object} Pagination metadata
+ */
+export function createPaginationMetadata(total, returned, limit, offset) {
+  return {
+    total,
+    returned,
+    limit,
+    offset,
+    hasMore: offset + returned < total
+  };
+}
+
+/**
+ * Applies pagination to an array of items
+ * @param {Array} items - Array of items to paginate
+ * @param {number} limit - Maximum number of items to return
+ * @param {number} offset - Number of items to skip
+ * @returns {object} Object with paginated items and metadata
+ */
+export function paginateArray(items, limit = 100, offset = 0) {
+  const total = items.length;
+  const paginatedItems = items.slice(offset, offset + limit);
+  const returned = paginatedItems.length;
+
+  return {
+    items: paginatedItems,
+    pagination: createPaginationMetadata(total, returned, limit, offset)
+  };
+}
+
+/**
  * Searches for matches in text content (pure function)
  * @param {string} content - The text content to search
  * @param {string} query - The search query
@@ -67,12 +103,12 @@ export function transformSearchResults(fileMatches, basePath) {
   const fileResults = fileMatches.map(({ file, matches }) => ({
     path: makeRelativePath(file, basePath),
     matchCount: matches.length,
-    matches: matches.slice(0, 5) // Limit to first 5 matches per file to avoid overwhelming output
+    matches: matches
   }));
-  
+
   // Calculate total match count
   const totalMatches = fileMatches.reduce((sum, { matches }) => sum + matches.length, 0);
-  
+
   return {
     files: fileResults,
     totalMatches,
@@ -104,52 +140,61 @@ export function makeRelativePath(absolutePath, basePath) {
 }
 
 /**
- * Filters search results by limit (pure function)
+ * Applies pagination to search results with offset/limit
  * @param {object} searchResults - Search results object
- * @param {number} maxResults - Maximum number of results
- * @returns {object} Limited search results
+ * @param {number} limit - Maximum number of matches to return
+ * @param {number} offset - Number of matches to skip
+ * @returns {object} Paginated search results with metadata
  */
-export function limitSearchResults(searchResults, maxResults) {
-  if (searchResults.totalMatches <= maxResults) {
-    return searchResults;
-  }
-  
-  // Limit by total matches, not by files
-  // This ensures we show as many files as possible within the limit
-  let matchCount = 0;
-  const limitedFiles = [];
-  
+export function paginateSearchResults(searchResults, limit = 100, offset = 0) {
+  const totalMatches = searchResults.totalMatches;
+
+  // Flatten all matches with file info
+  const allMatches = [];
   for (const file of searchResults.files) {
-    if (matchCount >= maxResults) {
-      break;
-    }
-    
-    const remainingSlots = maxResults - matchCount;
-    if (file.matchCount <= remainingSlots) {
-      // Include all matches from this file
-      limitedFiles.push(file);
-      matchCount += file.matchCount;
-    } else {
-      // Include only partial matches from this file
-      limitedFiles.push({
-        ...file,
-        matchCount: remainingSlots,
-        matches: file.matches.slice(0, remainingSlots),
-        partialFile: true
+    for (const match of file.matches) {
+      allMatches.push({
+        filePath: file.path,
+        ...match
       });
-      matchCount = maxResults;
     }
   }
-  
+
+  // Apply pagination
+  const paginatedMatches = allMatches.slice(offset, offset + limit);
+
+  // Reconstruct file structure
+  const filesMap = new Map();
+  for (const match of paginatedMatches) {
+    const filePath = match.filePath;
+    if (!filesMap.has(filePath)) {
+      filesMap.set(filePath, {
+        path: filePath,
+        matchCount: 0,
+        matches: []
+      });
+    }
+    const file = filesMap.get(filePath);
+    file.matchCount++;
+    file.matches.push({
+      line: match.line,
+      content: match.content,
+      ...(match.context && { context: match.context })
+    });
+  }
+
+  const paginatedFiles = Array.from(filesMap.values());
+  const pagination = createPaginationMetadata(totalMatches, paginatedMatches.length, limit, offset);
+
   return {
-    files: limitedFiles,
-    totalMatches: matchCount,
-    fileCount: limitedFiles.length,
+    files: paginatedFiles,
+    totalMatches: paginatedMatches.length,
+    fileCount: paginatedFiles.length,
     filesSearched: searchResults.filesSearched,
-    truncated: true,
-    message: `Results limited to ${maxResults} matches across ${limitedFiles.length} files`
+    pagination
   };
 }
+
 
 /**
  * Searches for matches using search operators (pure function)

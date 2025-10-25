@@ -44,17 +44,18 @@ describe('searchByTitle', () => {
       '/test/vault/Projects/Web Development.md',
       '/test/vault/Other.md'
     ];
-    
+
     glob.mockResolvedValue(mockFiles);
     stat.mockResolvedValue({ size: 1024 });
-    
+
+    // After sorting: Other.md, Projects/MCP Development.md, Projects/Web Development.md
     readFile
+      .mockResolvedValueOnce('# Other Title\n\nContent')
       .mockResolvedValueOnce('# MCP Development\n\nModel Context Protocol notes')
-      .mockResolvedValueOnce('# Web Development Guide\n\nHTML, CSS, JavaScript')
-      .mockResolvedValueOnce('# Other Title\n\nContent');
-    
+      .mockResolvedValueOnce('# Web Development Guide\n\nHTML, CSS, JavaScript');
+
     const result = await searchByTitle(mockVaultPath, 'Development');
-    
+
     expect(result.results).toHaveLength(2);
     expect(result.results.map(r => r.file)).toContain('Projects/MCP Development.md');
     expect(result.results.map(r => r.file)).toContain('Projects/Web Development.md');
@@ -151,5 +152,85 @@ describe('searchByTitle', () => {
   
   it('should handle missing query parameter', async () => {
     await expect(searchByTitle(mockVaultPath)).rejects.toThrow('query');
+  });
+
+  describe('Pagination', () => {
+    it('should paginate results correctly with offset=0', async () => {
+      // Create 12 mock files with zero-padded numbers for consistent sorting
+      const mockFiles = Array.from({ length: 12 }, (_, i) =>
+        `/test/vault/note${String(i + 1).padStart(2, '0')}.md`
+      );
+
+      glob.mockResolvedValue(mockFiles);
+      stat.mockResolvedValue({ size: 1024 });
+
+      // Mock readFile to return titles with "test" in them
+      readFile.mockImplementation(async (path) => {
+        const fileNum = parseInt(path.match(/note(\d+)/)[1]);
+        return `# Test Note ${fileNum}\n\nContent`;
+      });
+
+      const result = await searchByTitle(mockVaultPath, 'test', null, false, 5, 0);
+
+      expect(result.results).toHaveLength(5);
+      expect(result.pagination.total).toBe(12);
+      expect(result.pagination.returned).toBe(5);
+      expect(result.pagination.offset).toBe(0);
+      expect(result.pagination.hasMore).toBe(true);
+      expect(result.results[0].title).toBe('Test Note 1');
+      expect(result.results[4].title).toBe('Test Note 5');
+    });
+
+    it('should paginate results correctly with offset=5', async () => {
+      // Create 12 mock files with zero-padded numbers for consistent sorting
+      const mockFiles = Array.from({ length: 12 }, (_, i) =>
+        `/test/vault/note${String(i + 1).padStart(2, '0')}.md`
+      );
+
+      glob.mockResolvedValue(mockFiles);
+      stat.mockResolvedValue({ size: 1024 });
+
+      // Mock readFile to return titles with "test" in them
+      readFile.mockImplementation(async (path) => {
+        const fileNum = parseInt(path.match(/note(\d+)/)[1]);
+        return `# Test Note ${fileNum}\n\nContent`;
+      });
+
+      const result = await searchByTitle(mockVaultPath, 'test', null, false, 5, 5);
+
+      expect(result.results).toHaveLength(5);
+      expect(result.pagination.total).toBe(12);
+      expect(result.pagination.returned).toBe(5);
+      expect(result.pagination.offset).toBe(5);
+      expect(result.pagination.hasMore).toBe(true);
+      // Critical: offset=5 should return DIFFERENT results than offset=0
+      expect(result.results[0].title).toBe('Test Note 6');
+      expect(result.results[4].title).toBe('Test Note 10');
+    });
+
+    it('should return different results for different offsets', async () => {
+      const mockFiles = Array.from({ length: 12 }, (_, i) =>
+        `/test/vault/note${String(i + 1).padStart(2, '0')}.md`
+      );
+
+      glob.mockResolvedValue(mockFiles);
+      stat.mockResolvedValue({ size: 1024 });
+
+      readFile.mockImplementation(async (path) => {
+        const fileNum = parseInt(path.match(/note(\d+)/)[1]);
+        return `# Test Note ${fileNum}\n\nContent`;
+      });
+
+      const result1 = await searchByTitle(mockVaultPath, 'test', null, false, 5, 0);
+      const result2 = await searchByTitle(mockVaultPath, 'test', null, false, 5, 5);
+
+      // Results should be DIFFERENT
+      const titles1 = result1.results.map(r => r.title);
+      const titles2 = result2.results.map(r => r.title);
+
+      expect(titles1).not.toEqual(titles2);
+      expect(titles1).toEqual(['Test Note 1', 'Test Note 2', 'Test Note 3', 'Test Note 4', 'Test Note 5']);
+      expect(titles2).toEqual(['Test Note 6', 'Test Note 7', 'Test Note 8', 'Test Note 9', 'Test Note 10']);
+    });
   });
 });

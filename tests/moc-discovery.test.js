@@ -269,13 +269,14 @@ tags: moc
 
       glob.mockResolvedValue(mockFiles);
       stat.mockResolvedValue({ size: 1024 });
+      // After sorting: bad-moc.md comes before good-moc.md
       readFile
+        .mockRejectedValueOnce(new Error('Permission denied'))
         .mockResolvedValueOnce(`---
 tags: moc
 ---
 # Good MOC
-[[link]]`)
-        .mockRejectedValueOnce(new Error('Permission denied'));
+[[link]]`);
 
       const result = await discoverMocs(mockVaultPath);
 

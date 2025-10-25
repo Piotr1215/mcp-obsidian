@@ -8,7 +8,7 @@ import {
 import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
-import { textResponse, structuredResponse, errorResponse, createMetadata } from './response-formatter.js';
+import { textResponse, structuredResponse, errorResponse, createMetadata, stripSearchContext } from './response-formatter.js';
 import { glob } from 'glob';
 import path from 'path';
 import { readFile } from 'fs/promises';
@@ -54,14 +54,20 @@ export function createServer(vaultPath) {
     try {
       switch (name) {
       case 'search-vault': {
-        const { query, path: searchPath, caseSensitive = false, includeContext = true, contextLines = 2 } = args;
+        const { query, path: searchPath, caseSensitive = false, includeContext = true, contextLines = 2, limit = 100, offset = 0 } = args;
         const contextOptions = { includeContext, contextLines };
-        const result = await searchVault(vaultPath, query, searchPath, caseSensitive, contextOptions);
-        
-        let description = result.totalMatches === 0 
+        const result = await searchVault(vaultPath, query, searchPath, caseSensitive, contextOptions, limit, offset);
+
+        let description = result.totalMatches === 0
           ? `No matches found for "${query}"`
-          : `Found ${result.totalMatches} matches in ${result.fileCount} files for "${query}"`;
-        
+          : `Showing ${result.pagination.returned} of ${result.pagination.total} matches in ${result.fileCount} files for "${query}"`;
+
+        // Add pagination info
+        if (result.pagination.hasMore) {
+          const nextOffset = offset + limit;
+          description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
+        }
+
         // Add file results to the description when context is included
         // Limit preview to first 5 files to avoid context explosion
         if (includeContext && result.files.length > 0) {
@@ -107,44 +113,53 @@ export function createServer(vaultPath) {
           })
         );
         
-        const metadata = createMetadata(startTime, { 
+        const metadata = createMetadata(startTime, {
           tool: 'search-vault',
           filesSearched: result.filesSearched || 0
         });
-        
+
         // Create content array with text and resource links
         const content = createContentWithLinks(description, resourceLinks);
-        
+
+        // Strip verbose context from structuredContent to prevent token explosion
+        // Context is useful in description but not needed in structured response
+        const structuredContent = stripSearchContext(result);
+
         return {
           content,
-          structuredContent: result,
+          structuredContent,
           _meta: metadata
         };
       }
 
       case 'search-by-title': {
-        const { query, path: searchPath, caseSensitive = false } = args;
-        const result = await searchByTitle(vaultPath, query, searchPath, caseSensitive);
-        
-        const description = result.count === 0 
+        const { query, path: searchPath, caseSensitive = false, limit = 100, offset = 0 } = args;
+        const result = await searchByTitle(vaultPath, query, searchPath, caseSensitive, limit, offset);
+
+        let description = result.count === 0
           ? `No notes found with title matching "${query}"`
-          : `Found ${result.count} notes with title matching "${query}"`;
-        
+          : `Showing ${result.pagination.returned} of ${result.pagination.total} notes with title matching "${query}"`;
+
+        if (result.pagination.hasMore) {
+          const nextOffset = offset + limit;
+          description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
+        }
+
         // Create resource links for found notes
-        const resourceLinks = result.notes.map(note => 
-          createNoteResourceLink(vaultPath, note.path, {
+        const resourceLinks = (result.results || []).map(note =>
+          createNoteResourceLink(vaultPath, note.file, {
             title: note.title,
             tags: note.tags
           })
         );
-        
-        const metadata = createMetadata(startTime, { 
+
+        const metadata = createMetadata(startTime, {
           tool: 'search-by-title',
           filesSearched: result.filesSearched || 0
         });
-        
+
         const content = createContentWithLinks(description, resourceLinks);
-        
+
         return {
           content,
           structuredContent: result,
@@ -153,21 +168,26 @@ export function createServer(vaultPath) {
       }
 
       case 'list-notes': {
-        const { directory } = args;
-        const result = await listNotes(vaultPath, directory);
-        
-        const description = result.count === 0
+        const { directory, limit = 100, offset = 0 } = args;
+        const result = await listNotes(vaultPath, directory, limit, offset);
+
+        let description = result.count === 0
           ? `No notes found${directory ? ` in ${directory}` : ''}`
-          : `Found ${result.count} notes${directory ? ` in ${directory}` : ''}`;
-        
+          : `Showing ${result.pagination.returned} of ${result.pagination.total} notes${directory ? ` in ${directory}` : ''}`;
+
+        if (result.pagination.hasMore) {
+          const nextOffset = offset + limit;
+          description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
+        }
+
         // Create resource links for all notes
-        const resourceLinks = result.notes.map(notePath => 
+        const resourceLinks = result.notes.map(notePath =>
           createNoteResourceLink(vaultPath, notePath, {})
         );
-        
+
         const metadata = createMetadata(startTime, { tool: 'list-notes' });
         const content = createContentWithLinks(description, resourceLinks);
-        
+
         return {
           content,
           structuredContent: result,
@@ -237,11 +257,11 @@ export function createServer(vaultPath) {
       }
 
       case 'get-note-metadata': {
-        const { path: notePath, batch = false, directory } = args;
+        const { path: notePath, batch = false, directory, limit = 50, offset = 0 } = args;
 
         // In batch mode with directory, pass directory as the path
         const pathArg = batch && directory ? directory : notePath;
-        const result = await getNoteMetadata(vaultPath, pathArg, { batch });
+        const result = await getNoteMetadata(vaultPath, pathArg, { batch, limit, offset });
 
         let description;
         let resourceLinks = [];
@@ -249,17 +269,22 @@ export function createServer(vaultPath) {
         if (batch) {
           description = result.count === 0
             ? 'No notes found'
-            : `Retrieved metadata for ${result.count} notes`;
+            : `Showing ${result.pagination.returned} of ${result.pagination.total} notes`;
           if (result.errors && result.errors.length > 0) {
             description += ` (${result.errors.length} errors)`;
+          }
+
+          if (result.pagination.hasMore) {
+            const nextOffset = offset + limit;
+            description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
           }
 
           // Create resource links for batch mode
           if (result.notes) {
             resourceLinks = result.notes.map(note =>
               createNoteResourceLink(vaultPath, note.path, {
-                title: note.metadata.title,
-                tags: note.metadata.tags
+                title: note.title,
+                tags: note.tags
               })
             );
           }
