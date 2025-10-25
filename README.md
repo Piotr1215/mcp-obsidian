@@ -64,9 +64,13 @@ npm run test:coverage
 
 # Run tests with coverage and check thresholds
 npm run coverage
-```
 
-The test suite includes unit tests for all tools and integration tests for the MCP protocol.
+# Run mutation testing (all files)
+npm run test:mutation
+
+# Run mutation testing (pagination code only - faster)
+npm run test:mutation-pagination
+```
 
 ### Adding to Claude Desktop
 

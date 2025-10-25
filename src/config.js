@@ -6,7 +6,7 @@ export const config = {
   // File size limits
   limits: {
     maxFileSize: 10 * 1024 * 1024, // 10MB max file size
-    maxSearchResults: 1000, // Maximum number of search results
+    maxSearchResults: 100, // Maximum number of search results (reduced from 1000 to prevent context explosion)
     maxConcurrentReads: 10, // Maximum concurrent file reads
   },
   

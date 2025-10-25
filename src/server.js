@@ -63,9 +63,13 @@ export function createServer(vaultPath) {
           : `Found ${result.totalMatches} matches in ${result.fileCount} files for "${query}"`;
         
         // Add file results to the description when context is included
+        // Limit preview to first 5 files to avoid context explosion
         if (includeContext && result.files.length > 0) {
           description += '\n\n';
-          result.files.forEach(file => {
+          const maxFilesInPreview = 5;
+          const filesToShow = result.files.slice(0, maxFilesInPreview);
+
+          filesToShow.forEach(file => {
             description += `📄 ${file.path} (${file.matchCount} matches)\n`;
             file.matches.slice(0, 3).forEach(match => {
               if (match.context) {
@@ -87,6 +91,11 @@ export function createServer(vaultPath) {
             }
             description += '\n';
           });
+
+          // Indicate if results are truncated
+          if (result.files.length > maxFilesInPreview) {
+            description += `\n... and ${result.files.length - maxFilesInPreview} more files. Use resource links below to access all results.\n`;
+          }
         }
         
         // Create resource links for all found files

@@ -26,6 +26,12 @@ coverage
 # nyc test coverage
 .nyc_output
 
+# Stryker mutation testing
+.stryker-tmp/
+reports/mutation/
+stryker-output.log
+stryker-pagination-output.log
+
 # Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
