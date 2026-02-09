@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { searchVault, listNotes, readNote, writeNote, deleteNote } from '../src/tools.js';
+import { searchVault, listNotes, readNote, writeNote, appendNote, deleteNote } from '../src/tools.js';
 
 // Mock fs and glob
 vi.mock('fs/promises');
@@ -284,6 +284,103 @@ describe('Tools module', () => {
 
       await expect(deleteNote(mockVaultPath, 'protected.md'))
         .rejects.toThrow('Permission denied');
+    });
+  });
+
+  describe('appendNote', () => {
+    it('should append content to existing note', async () => {
+      access.mockResolvedValue();
+      readFile.mockResolvedValue('# Existing Note\n\nSome content');
+      mkdir.mockResolvedValue();
+      writeFile.mockResolvedValue();
+
+      const result = await appendNote(mockVaultPath, 'note.md', 'New content');
+
+      expect(writeFile).toHaveBeenCalledWith(
+        '/test/vault/note.md',
+        '# Existing Note\n\nSome content\nNew content',
+        'utf-8'
+      );
+      expect(result).toBe('note.md');
+    });
+
+    it('should create new note if file does not exist', async () => {
+      access.mockRejectedValue(new Error('ENOENT'));
+      mkdir.mockResolvedValue();
+      writeFile.mockResolvedValue();
+
+      const result = await appendNote(mockVaultPath, 'new-note.md', '# New Note');
+
+      expect(writeFile).toHaveBeenCalledWith(
+        '/test/vault/new-note.md',
+        '# New Note',
+        'utf-8'
+      );
+      expect(result).toBe('new-note.md');
+    });
+
+    it('should append under specific section', async () => {
+      access.mockResolvedValue();
+      readFile.mockResolvedValue('# Note\n\n## Section A\n\nContent A\n\n## Section B\n\nContent B');
+      mkdir.mockResolvedValue();
+      writeFile.mockResolvedValue();
+
+      await appendNote(mockVaultPath, 'note.md', 'Appended text', { section: 'Section A' });
+
+      expect(writeFile).toHaveBeenCalledWith(
+        '/test/vault/note.md',
+        '# Note\n\n## Section A\n\nContent A\n\nAppended text\n## Section B\n\nContent B',
+        'utf-8'
+      );
+    });
+
+    it('should throw error if section not found', async () => {
+      access.mockResolvedValue();
+      readFile.mockResolvedValue('# Note\n\n## Other Section\n\nContent');
+      mkdir.mockResolvedValue();
+
+      await expect(appendNote(mockVaultPath, 'note.md', 'Content', { section: 'Missing' }))
+        .rejects.toThrow('Section "Missing" not found');
+    });
+
+    it('should handle ensureNewline option', async () => {
+      access.mockResolvedValue();
+      readFile.mockResolvedValue('Content without newline');
+      mkdir.mockResolvedValue();
+      writeFile.mockResolvedValue();
+
+      await appendNote(mockVaultPath, 'note.md', 'More content', { ensureNewline: true });
+
+      expect(writeFile).toHaveBeenCalledWith(
+        '/test/vault/note.md',
+        'Content without newline\nMore content',
+        'utf-8'
+      );
+    });
+
+    it('should not add extra newline when ensureNewline is false', async () => {
+      access.mockResolvedValue();
+      readFile.mockResolvedValue('Content');
+      mkdir.mockResolvedValue();
+      writeFile.mockResolvedValue();
+
+      await appendNote(mockVaultPath, 'note.md', ' appended', { ensureNewline: false });
+
+      expect(writeFile).toHaveBeenCalledWith(
+        '/test/vault/note.md',
+        'Content appended',
+        'utf-8'
+      );
+    });
+
+    it('should propagate write errors', async () => {
+      access.mockResolvedValue();
+      readFile.mockResolvedValue('Existing');
+      mkdir.mockResolvedValue();
+      writeFile.mockRejectedValue(new Error('Disk full'));
+
+      await expect(appendNote(mockVaultPath, 'note.md', 'Content'))
+        .rejects.toThrow('Failed to append to note');
     });
   });
 });

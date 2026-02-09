@@ -305,6 +305,115 @@ export async function writeNote(vaultPath, notePath, content) {
 }
 
 /**
+ * Append content to an existing note or create a new note (I/O function with validation)
+ * @param {string} vaultPath - The vault base path
+ * @param {string} notePath - Path to the note relative to vault root
+ * @param {string} content - Content to append
+ * @param {object} options - Append options
+ * @param {string} options.section - Optional heading to append under
+ * @param {boolean} options.ensureNewline - Ensure content starts on new line (default: true)
+ * @returns {Promise<string>} The note path
+ */
+export async function appendNote(vaultPath, notePath, content, options = {}) {
+  const { section = null, ensureNewline = true } = options;
+
+  // Pure validations
+  const paramValidation = validateRequiredParameters({ path: notePath, content }, ['path', 'content']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
+
+  const extensionValidation = validateMarkdownExtension(notePath);
+  assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
+
+  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
+
+  const fullPath = pathValidation.resolvedPath;
+  const dir = path.dirname(fullPath);
+
+  // Pure: Sanitize content
+  const sanitizedContent = sanitizeContentPure(content);
+
+  // I/O: Check if file exists and read current content
+  let existingContent = '';
+  let fileExists = false;
+
+  try {
+    await access(fullPath, constants.R_OK);
+    existingContent = await readFile(fullPath, 'utf-8');
+    fileExists = true;
+  } catch (error) {
+    // File doesn't exist - will create new
+    fileExists = false;
+  }
+
+  // Build new content
+  let newContent;
+
+  if (!fileExists) {
+    // Create new file with content
+    newContent = sanitizedContent;
+  } else if (section) {
+    // Append under specific heading
+    const headingPattern = new RegExp(`^(#{1,6})\\s+${escapeRegex(section)}\\s*$`, 'im');
+    const match = existingContent.match(headingPattern);
+
+    if (!match) {
+      throw Errors.invalidParams(`Section "${section}" not found in note`, { path: notePath, section });
+    }
+
+    // Find where to insert: after the heading, before the next heading of same or higher level
+    const headingLevel = match[1].length;
+    const headingIndex = existingContent.indexOf(match[0]);
+    const afterHeading = headingIndex + match[0].length;
+
+    // Find next heading of same or higher level
+    const nextHeadingPattern = new RegExp(`^#{1,${headingLevel}}\\s+`, 'im');
+    const restContent = existingContent.slice(afterHeading);
+    const nextMatch = restContent.match(nextHeadingPattern);
+
+    let insertPosition;
+    if (nextMatch) {
+      insertPosition = afterHeading + nextMatch.index;
+    } else {
+      insertPosition = existingContent.length;
+    }
+
+    // Insert content
+    const before = existingContent.slice(0, insertPosition);
+    const after = existingContent.slice(insertPosition);
+
+    // Ensure proper newlines
+    const prefix = before.endsWith('\n\n') ? '' : (before.endsWith('\n') ? '\n' : '\n\n');
+    const suffix = after.startsWith('\n') ? '' : '\n';
+
+    newContent = before + prefix + sanitizedContent + suffix + after;
+  } else {
+    // Append to end
+    const prefix = ensureNewline && !existingContent.endsWith('\n') ? '\n' : '';
+    newContent = existingContent + prefix + sanitizedContent;
+  }
+
+  // I/O: Write file
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(fullPath, newContent, 'utf-8');
+    return notePath;
+  } catch (error) {
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      throw Errors.accessDenied(`Permission denied: ${notePath}`, { path: notePath });
+    }
+    throw Errors.internalError(`Failed to append to note: ${error.message}`, { path: notePath });
+  }
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Delete note (I/O function with validation)
  */
 export async function deleteNote(vaultPath, notePath) {
