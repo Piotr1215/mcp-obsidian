@@ -60,15 +60,88 @@ number: 42
 boolean: true
 array: [item1, item2]
 ---`;
-      
+
       const result = extractFrontmatter(content);
-      
+
       expect(result.frontmatter).toEqual({
         string: 'quoted string',
         number: 42,
         boolean: true,
         array: ['item1', 'item2']
       });
+    });
+
+    it('should strip double quotes from flow array items', () => {
+      const content = `---
+tags: ["topic/ai-ml", "topic/claude-code"]
+topic: ["ai-ml"]
+---`;
+
+      const result = extractFrontmatter(content);
+
+      expect(result.frontmatter).toEqual({
+        tags: ['topic/ai-ml', 'topic/claude-code'],
+        topic: ['ai-ml']
+      });
+    });
+
+    it('should strip single quotes from flow array items', () => {
+      const content = `---
+tags: ['topic/ai-ml', 'topic/claude-code']
+---`;
+
+      const result = extractFrontmatter(content);
+
+      expect(result.frontmatter).toEqual({
+        tags: ['topic/ai-ml', 'topic/claude-code']
+      });
+    });
+
+    it('should handle mixed quoted and unquoted array items', () => {
+      const content = `---
+tags: [plain, "double", 'single']
+---`;
+
+      const result = extractFrontmatter(content);
+
+      expect(result.frontmatter).toEqual({
+        tags: ['plain', 'double', 'single']
+      });
+    });
+
+    it('should preserve inner quotes when stripping outer quote pair', () => {
+      const content = `---
+aliases: ['"текст"']
+---`;
+
+      const result = extractFrontmatter(content);
+
+      // Outer single quotes are YAML syntax; inner double quotes are content
+      expect(result.frontmatter).toEqual({
+        aliases: ['"текст"']
+      });
+    });
+
+    it('should not strip unmatched or lone quotes in array items', () => {
+      const content = `---
+tags: ["mismatched', "]
+---`;
+
+      const result = extractFrontmatter(content);
+
+      expect(result.frontmatter).toEqual({
+        tags: [`"mismatched'`, '"']
+      });
+    });
+
+    it('should parse empty flow array as empty array', () => {
+      const content = `---
+tags: []
+---`;
+
+      const result = extractFrontmatter(content);
+
+      expect(result.frontmatter).toEqual({ tags: [] });
     });
   });
   
