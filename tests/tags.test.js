@@ -39,8 +39,43 @@ describe('Functional Tag Utilities', () => {
     it('should handle special characters in tags', () => {
       const content = '---\ntags: [tag-with-dash, tag.with.dot, tag/with/slash]\n---\n';
       const tags = extractFrontmatterTags(content);
-      
+
       expect(tags).toEqual(['tag-with-dash', 'tag.with.dot', 'tag/with/slash']);
+    });
+
+    it('should strip double quotes from array tags', () => {
+      const content = '---\ntags: ["topic/ai-ml", "topic/claude-code"]\n---\n';
+      const tags = extractFrontmatterTags(content);
+
+      expect(tags).toEqual(['topic/ai-ml', 'topic/claude-code']);
+    });
+
+    it('should strip single quotes from array tags', () => {
+      const content = "---\ntags: ['topic/ai-ml', 'topic/claude-code']\n---\n";
+      const tags = extractFrontmatterTags(content);
+
+      expect(tags).toEqual(['topic/ai-ml', 'topic/claude-code']);
+    });
+
+    it('should strip only the outer quote pair, preserving inner quotes', () => {
+      const content = '---\ntags: [\'"quoted"\']\n---\n';
+      const tags = extractFrontmatterTags(content);
+
+      expect(tags).toEqual(['"quoted"']);
+    });
+
+    it('should strip quotes from YAML list format tags', () => {
+      const content = '---\ntags:\n  - "tag1"\n  - \'tag2\'\n  - tag3\n---\n';
+      const tags = extractFrontmatterTags(content);
+
+      expect(tags).toEqual(['tag1', 'tag2', 'tag3']);
+    });
+
+    it('should strip quotes from single tag format', () => {
+      const content = '---\ntags: "singletag"\n---\n';
+      const tags = extractFrontmatterTags(content);
+
+      expect(tags).toEqual(['singletag']);
     });
   });
 

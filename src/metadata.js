@@ -48,6 +48,22 @@ export function extractFrontmatter(content) {
 }
 
 /**
+ * Strips one matching pair of surrounding quotes from a YAML scalar (pure function)
+ * Quotes are YAML syntax, not part of the value: "topic/ai-ml" -> topic/ai-ml.
+ * Inner quotes are preserved: '"текст"' -> "текст".
+ * @param {string} value - Trimmed scalar value
+ * @returns {string} Value without surrounding quote pair
+ */
+export function stripYamlQuotes(value) {
+  if (value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+       (value.startsWith("'") && value.endsWith("'")))) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+/**
  * Parse YAML content into object (simplified parser)
  * @param {string} yamlContent - YAML string
  * @returns {object} Parsed object
@@ -55,27 +71,30 @@ export function extractFrontmatter(content) {
 function parseYamlContent(yamlContent) {
   const result = {};
   const lines = yamlContent.split('\n');
-  
+
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    
+
     const colonIndex = trimmed.indexOf(':');
     if (colonIndex === -1) continue;
-    
+
     const key = trimmed.substring(0, colonIndex).trim();
     const value = trimmed.substring(colonIndex + 1).trim();
-    
+
     if (!key) continue;
-    
+
     // Handle arrays [item1, item2]
     if (value.startsWith('[') && value.endsWith(']')) {
-      const items = value.slice(1, -1).split(',').map(item => item.trim());
-      result[key] = items;
+      const inner = value.slice(1, -1).trim();
+      result[key] = inner === ''
+        ? []
+        : inner.split(',').map(item => stripYamlQuotes(item.trim()));
     }
     // Handle quoted strings
-    else if ((value.startsWith('"') && value.endsWith('"')) || 
-             (value.startsWith("'") && value.endsWith("'"))) {
+    else if (value.length >= 2 &&
+             ((value.startsWith('"') && value.endsWith('"')) ||
+              (value.startsWith("'") && value.endsWith("'")))) {
       result[key] = value.slice(1, -1);
     }
     // Handle booleans
@@ -91,7 +110,7 @@ function parseYamlContent(yamlContent) {
       result[key] = value;
     }
   }
-  
+
   return result;
 }
 
