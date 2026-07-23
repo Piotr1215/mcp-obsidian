@@ -11,6 +11,12 @@ import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
 import { extractH1Title, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
 import { extractWikilinks, isMoc } from './links.js';
+import {
+  buildGraph,
+  getBacklinks as getBacklinksPure,
+  findOrphans as findOrphansPure,
+  getNeighborhood as getNeighborhoodPure
+} from './graph.js';
 import { 
   validatePathWithinBase, 
   validateMarkdownExtension, 
@@ -576,6 +582,151 @@ export async function discoverMocs(vaultPath, options = {}) {
   return {
     mocs: mocs,
     count: mocs.length
+  };
+}
+
+/**
+ * Load the vault link graph (I/O: glob + read, then pure buildGraph)
+ * @param {string} vaultPath - The vault base path
+ * @param {string} [directory] - Limit to a specific directory (optional)
+ * @returns {Promise<object>} Graph from buildGraph
+ */
+async function loadVaultGraph(vaultPath, directory) {
+  if (directory) {
+    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
+  }
+
+  const searchPattern = directory
+    ? path.join(vaultPath, directory, '**/*.md')
+    : path.join(vaultPath, '**/*.md');
+
+  const files = await glob(searchPattern);
+  files.sort();
+
+  const notes = [];
+  for (const file of files) {
+    try {
+      const stats = await stat(file);
+      const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
+      if (!sizeValidation.valid) {
+        continue; // Skip large files
+      }
+      const content = await readFile(file, 'utf-8');
+      notes.push({ path: path.relative(vaultPath, file), content });
+    } catch (error) {
+      // Skip files with read errors
+      continue;
+    }
+  }
+
+  return buildGraph(notes);
+}
+
+/**
+ * Resolve a note reference against graph nodes (accept basename references,
+ * mirroring resolveNotePath's wikilink-style fallback without extra I/O)
+ * @param {object} graph - Graph from buildGraph
+ * @param {string} notePath - Requested path or basename
+ * @returns {string} Resolved node path
+ */
+function resolveGraphNode(graph, notePath) {
+  if (graph.forward.has(notePath)) {
+    return notePath;
+  }
+  const targetBase = path.basename(notePath, '.md').toLowerCase();
+  const candidates = graph.nodes.filter(
+    n => path.basename(n, '.md').toLowerCase() === targetBase
+  );
+  if (candidates.length === 0) {
+    throw Errors.resourceNotFound(notePath, { path: notePath });
+  }
+  if (candidates.length > 1) {
+    throw Errors.invalidParams(
+      `Ambiguous path "${notePath}" matches multiple notes: ${candidates.join(', ')}. Please specify the full path.`,
+      { path: notePath, matches: candidates.join(', ') }
+    );
+  }
+  return candidates[0];
+}
+
+/**
+ * Get backlinks for a note (I/O function using pure functions)
+ * @param {string} vaultPath - The vault base path
+ * @param {string} notePath - Note path relative to vault root
+ * @returns {Promise<object>} Backlinks with pagination-free count
+ */
+export async function getBacklinks(vaultPath, notePath) {
+  const paramValidation = validateRequiredParameters({ path: notePath }, ['path']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
+
+  const graph = await loadVaultGraph(vaultPath);
+  const resolved = resolveGraphNode(graph, notePath);
+
+  const backlinks = getBacklinksPure(graph, resolved);
+  return {
+    path: resolved,
+    backlinks,
+    count: backlinks.length
+  };
+}
+
+/**
+ * Find broken wikilinks across the vault (I/O function using pure functions)
+ * @param {string} vaultPath - The vault base path
+ * @param {object} options - Options
+ * @param {string} [options.directory] - Limit to a specific directory
+ * @returns {Promise<object>} Broken links with source and candidates
+ */
+export async function findBrokenLinks(vaultPath, options = {}) {
+  const { directory } = options;
+  const graph = await loadVaultGraph(vaultPath, directory);
+
+  return {
+    brokenLinks: graph.broken,
+    count: graph.broken.length
+  };
+}
+
+/**
+ * Find orphaned notes — no links in or out (I/O function using pure functions)
+ * @param {string} vaultPath - The vault base path
+ * @param {object} options - Options
+ * @param {string} [options.directory] - Limit to a specific directory
+ * @returns {Promise<object>} Orphaned note paths
+ */
+export async function findOrphans(vaultPath, options = {}) {
+  const { directory } = options;
+  const graph = await loadVaultGraph(vaultPath, directory);
+
+  const orphans = findOrphansPure(graph);
+  return {
+    orphans,
+    count: orphans.length
+  };
+}
+
+/**
+ * Get the link neighborhood of a note (I/O function using pure functions)
+ * @param {string} vaultPath - The vault base path
+ * @param {string} notePath - Center note path relative to vault root
+ * @param {number} depth - Maximum distance (1-3)
+ * @returns {Promise<object>} Neighbors with distances
+ */
+export async function getGraphNeighborhood(vaultPath, notePath, depth = 1) {
+  const paramValidation = validateRequiredParameters({ path: notePath }, ['path']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
+
+  const boundedDepth = Math.min(Math.max(Math.trunc(depth) || 1, 1), 3);
+  const graph = await loadVaultGraph(vaultPath);
+  const resolved = resolveGraphNode(graph, notePath);
+
+  const neighbors = getNeighborhoodPure(graph, resolved, boundedDepth);
+  return {
+    path: resolved,
+    depth: boundedDepth,
+    neighbors,
+    count: neighbors.length
   };
 }
 

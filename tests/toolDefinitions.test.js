@@ -12,6 +12,10 @@ describe('Tool Definitions', () => {
     expect(toolNames).toContain('delete-note');
     expect(toolNames).toContain('search-by-tags');
     expect(toolNames).toContain('get-note-metadata');
+    expect(toolNames).toContain('get-backlinks');
+    expect(toolNames).toContain('find-broken-links');
+    expect(toolNames).toContain('find-orphans');
+    expect(toolNames).toContain('get-graph-neighborhood');
   });
 
   it('should have valid schemas for all tools', () => {
@@ -45,6 +49,18 @@ describe('Tool Definitions', () => {
     
     const titleSearchTool = toolDefinitions.find(t => t.name === 'search-by-title');
     expect(titleSearchTool.inputSchema.required).toEqual(['query']);
+
+    const backlinksTool = toolDefinitions.find(t => t.name === 'get-backlinks');
+    expect(backlinksTool.inputSchema.required).toEqual(['path']);
+
+    const brokenLinksTool = toolDefinitions.find(t => t.name === 'find-broken-links');
+    expect(brokenLinksTool.inputSchema.required).toBeUndefined();
+
+    const orphansTool = toolDefinitions.find(t => t.name === 'find-orphans');
+    expect(orphansTool.inputSchema.required).toBeUndefined();
+
+    const neighborhoodTool = toolDefinitions.find(t => t.name === 'get-graph-neighborhood');
+    expect(neighborhoodTool.inputSchema.required).toEqual(['path']);
   });
 
   it('should not require context.lines in search-vault output schema (stripped from structured content)', () => {

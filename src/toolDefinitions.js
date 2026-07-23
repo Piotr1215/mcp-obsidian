@@ -719,4 +719,202 @@ export const toolDefinitions = [
       additionalProperties: false
     }
   },
+  {
+    name: 'get-backlinks',
+    title: 'Get Backlinks',
+    description: 'Find all notes that link to a given note via wikilinks. Useful for understanding what depends on a note before renaming or deleting it, and for discovering related content.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the target note relative to vault root (basename accepted if unambiguous)',
+        },
+      },
+      required: ['path'],
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Resolved path of the target note'
+        },
+        backlinks: {
+          type: 'array',
+          items: {
+            type: 'string'
+          },
+          description: 'Paths of notes linking to the target, sorted'
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of backlinks',
+          minimum: 0
+        }
+      },
+      required: ['path', 'backlinks', 'count'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'find-broken-links',
+    title: 'Find Broken Links',
+    description: 'Find wikilinks that do not resolve to any note in the vault, including ambiguous links matching multiple notes. Useful for vault maintenance after renames and deletions.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        directory: {
+          type: 'string',
+          description: 'Limit scan to specific directory (optional; link targets are still resolved within that directory only)',
+        },
+      },
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        brokenLinks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              source: {
+                type: 'string',
+                description: 'Path of the note containing the broken link'
+              },
+              target: {
+                type: 'string',
+                description: 'The unresolved wikilink target as written'
+              },
+              ambiguous: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                description: 'Candidate paths when the link matches multiple notes (empty if simply missing)'
+              }
+            },
+            required: ['source', 'target', 'ambiguous'],
+            additionalProperties: false
+          },
+          description: 'List of broken or ambiguous wikilinks'
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of broken links',
+          minimum: 0
+        }
+      },
+      required: ['brokenLinks', 'count'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'find-orphans',
+    title: 'Find Orphaned Notes',
+    description: 'Find notes with no incoming and no outgoing wikilinks — disconnected from the vault graph. Useful for spotting notes that were never linked into MOCs.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        directory: {
+          type: 'string',
+          description: 'Limit scan to specific directory (optional)',
+        },
+      },
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        orphans: {
+          type: 'array',
+          items: {
+            type: 'string'
+          },
+          description: 'Paths of orphaned notes, sorted'
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of orphaned notes',
+          minimum: 0
+        }
+      },
+      required: ['orphans', 'count'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'get-graph-neighborhood',
+    title: 'Get Graph Neighborhood',
+    description: 'Get all notes within N link-hops of a given note (following wikilinks in both directions). Useful for gathering the local context around a topic.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the center note relative to vault root (basename accepted if unambiguous)',
+        },
+        depth: {
+          type: 'integer',
+          description: 'Maximum link distance from the center note (1-3, default 1)',
+          minimum: 1,
+          maximum: 3,
+          default: 1
+        },
+      },
+      required: ['path'],
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Resolved path of the center note'
+        },
+        depth: {
+          type: 'integer',
+          description: 'Effective depth used for traversal',
+          minimum: 1
+        },
+        neighbors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'Path of the neighboring note'
+              },
+              distance: {
+                type: 'integer',
+                description: 'Link distance from the center note',
+                minimum: 1
+              }
+            },
+            required: ['path', 'distance'],
+            additionalProperties: false
+          },
+          description: 'Neighboring notes sorted by distance, then path'
+        },
+        count: {
+          type: 'integer',
+          description: 'Number of neighbors',
+          minimum: 0
+        }
+      },
+      required: ['path', 'depth', 'neighbors', 'count'],
+      additionalProperties: false
+    }
+  },
 ];

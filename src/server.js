@@ -3,7 +3,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
+import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs, getBacklinks, findBrokenLinks, findOrphans, getGraphNeighborhood } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
 import { textResponse, structuredResponse, errorResponse, createMetadata, stripSearchContext } from './response-formatter.js';
@@ -237,6 +237,100 @@ export function createServer(vaultPath) {
           tool: 'discover-mocs',
           mocsFound: result.count,
           totalLinkedNotes: result.mocs.reduce((sum, moc) => sum + moc.linkCount, 0)
+        });
+
+        return structuredResponse(result, description, metadata);
+      }
+
+      case 'get-backlinks': {
+        const { path: notePath } = args;
+        const result = await getBacklinks(vaultPath, notePath);
+
+        let description = result.count === 0
+          ? `No backlinks found for ${result.path}`
+          : `Found ${result.count} backlinks for ${result.path}`;
+
+        if (result.backlinks.length > 0) {
+          description += '\n\n' + result.backlinks.map(b => `- ${b}`).join('\n');
+        }
+
+        const metadata = createMetadata(startTime, {
+          tool: 'get-backlinks',
+          backlinksFound: result.count
+        });
+
+        return structuredResponse(result, description, metadata);
+      }
+
+      case 'find-broken-links': {
+        const { directory } = args;
+        const result = await findBrokenLinks(vaultPath, { directory });
+
+        let description = result.count === 0
+          ? `No broken links found${directory ? ` in ${directory}` : ''}`
+          : `Found ${result.count} broken links${directory ? ` in ${directory}` : ''}`;
+
+        if (result.brokenLinks.length > 0) {
+          description += '\n\n';
+          const maxInPreview = 20;
+          result.brokenLinks.slice(0, maxInPreview).forEach(link => {
+            description += `${link.source}: [[${link.target}]]`;
+            if (link.ambiguous.length > 0) {
+              description += ` (ambiguous: ${link.ambiguous.join(', ')})`;
+            }
+            description += '\n';
+          });
+          if (result.brokenLinks.length > maxInPreview) {
+            description += `... and ${result.brokenLinks.length - maxInPreview} more\n`;
+          }
+        }
+
+        const metadata = createMetadata(startTime, {
+          tool: 'find-broken-links',
+          brokenLinksFound: result.count
+        });
+
+        return structuredResponse(result, description, metadata);
+      }
+
+      case 'find-orphans': {
+        const { directory } = args;
+        const result = await findOrphans(vaultPath, { directory });
+
+        let description = result.count === 0
+          ? `No orphaned notes found${directory ? ` in ${directory}` : ''}`
+          : `Found ${result.count} orphaned notes${directory ? ` in ${directory}` : ''}`;
+
+        if (result.orphans.length > 0) {
+          description += '\n\n' + result.orphans.map(o => `- ${o}`).join('\n');
+        }
+
+        const metadata = createMetadata(startTime, {
+          tool: 'find-orphans',
+          orphansFound: result.count
+        });
+
+        return structuredResponse(result, description, metadata);
+      }
+
+      case 'get-graph-neighborhood': {
+        const { path: notePath, depth = 1 } = args;
+        const result = await getGraphNeighborhood(vaultPath, notePath, depth);
+
+        let description = result.count === 0
+          ? `No linked notes within ${result.depth} hops of ${result.path}`
+          : `Found ${result.count} notes within ${result.depth} hops of ${result.path}`;
+
+        if (result.neighbors.length > 0) {
+          description += '\n\n';
+          result.neighbors.forEach(n => {
+            description += `- ${n.path} (distance ${n.distance})\n`;
+          });
+        }
+
+        const metadata = createMetadata(startTime, {
+          tool: 'get-graph-neighborhood',
+          neighborsFound: result.count
         });
 
         return structuredResponse(result, description, metadata);
