@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    // Don't pick up test copies inside git worktrees (.claude/worktrees/*) —
+    // parallel duplicate runs race on shared temp fixtures and flake.
+    exclude: ['**/node_modules/**', '**/.claude/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
