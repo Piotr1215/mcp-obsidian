@@ -3,8 +3,10 @@ import {
   textResponse,
   structuredResponse,
   errorResponse,
-  createMetadata
+  createMetadata,
+  stripSearchContext
 } from '../src/response-formatter.js';
+import { toolDefinitions } from '../src/toolDefinitions.js';
 
 describe('Response Formatter', () => {
   describe('textResponse', () => {
@@ -76,6 +78,87 @@ describe('Response Formatter', () => {
         ],
         isError: true
       });
+    });
+  });
+
+  describe('stripSearchContext', () => {
+    const searchResultsWithContext = {
+      files: [
+        {
+          path: 'note.md',
+          matchCount: 1,
+          matches: [
+            {
+              line: 2,
+              content: 'a test line',
+              context: {
+                lines: [
+                  { number: 1, text: 'before', isMatch: false },
+                  { number: 2, text: 'a test line', isMatch: true },
+                  { number: 3, text: 'after', isMatch: false }
+                ],
+                highlighted: 'a **test** line'
+              }
+            }
+          ]
+        }
+      ],
+      totalMatches: 1,
+      fileCount: 1,
+      filesSearched: 1,
+      pagination: { total: 1, returned: 1, limit: 100, offset: 0, hasMore: false }
+    };
+
+    it('should remove context.lines but keep highlighted', () => {
+      const stripped = stripSearchContext(searchResultsWithContext);
+      const match = stripped.files[0].matches[0];
+
+      expect(match.context).toEqual({ highlighted: 'a **test** line' });
+      expect(match.context).not.toHaveProperty('lines');
+      expect(match.line).toBe(2);
+      expect(match.content).toBe('a test line');
+    });
+
+    it('should leave matches without context untouched', () => {
+      const results = {
+        files: [
+          {
+            path: 'note.md',
+            matchCount: 1,
+            matches: [{ line: 1, content: 'plain match' }]
+          }
+        ],
+        totalMatches: 1,
+        fileCount: 1,
+        filesSearched: 1
+      };
+
+      const stripped = stripSearchContext(results);
+      expect(stripped.files[0].matches[0]).toEqual({ line: 1, content: 'plain match' });
+    });
+
+    it('should return input unchanged when there are no files', () => {
+      expect(stripSearchContext(null)).toBeNull();
+      expect(stripSearchContext({ totalMatches: 0 })).toEqual({ totalMatches: 0 });
+    });
+
+    it('should produce context objects valid against the search-vault outputSchema (regression: includeContext=true)', () => {
+      // Regression for: "data/files/0/matches/0/context must have required property 'lines'".
+      // stripSearchContext intentionally drops context.lines for token savings,
+      // so the schema must not require any property that gets stripped.
+      const searchTool = toolDefinitions.find(t => t.name === 'search-vault');
+      const contextSchema = searchTool.outputSchema
+        .properties.files.items
+        .properties.matches.items
+        .properties.context;
+
+      const stripped = stripSearchContext(searchResultsWithContext);
+      const context = stripped.files[0].matches[0].context;
+
+      for (const requiredProp of contextSchema.required) {
+        expect(context, `stripped context is missing required property '${requiredProp}'`)
+          .toHaveProperty(requiredProp);
+      }
     });
   });
 

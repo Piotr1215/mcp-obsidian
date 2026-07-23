@@ -90,7 +90,7 @@ export const toolDefinitions = [
                       properties: {
                         lines: {
                           type: 'array',
-                          description: 'Surrounding lines with line numbers',
+                          description: 'Surrounding lines with line numbers (omitted from structured content to reduce token usage; see text content for context preview)',
                           items: {
                             type: 'object',
                             properties: {
@@ -116,7 +116,7 @@ export const toolDefinitions = [
                           description: 'Matching line with search terms highlighted using **'
                         }
                       },
-                      required: ['lines', 'highlighted']
+                      required: ['highlighted']
                     }
                   },
                   required: ['line', 'content']

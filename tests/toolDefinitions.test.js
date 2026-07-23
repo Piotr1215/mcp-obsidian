@@ -46,4 +46,17 @@ describe('Tool Definitions', () => {
     const titleSearchTool = toolDefinitions.find(t => t.name === 'search-by-title');
     expect(titleSearchTool.inputSchema.required).toEqual(['query']);
   });
+
+  it('should not require context.lines in search-vault output schema (stripped from structured content)', () => {
+    // stripSearchContext removes context.lines from structuredContent to save tokens.
+    // Requiring it in the outputSchema caused validation failures on includeContext=true.
+    const searchTool = toolDefinitions.find(t => t.name === 'search-vault');
+    const contextSchema = searchTool.outputSchema
+      .properties.files.items
+      .properties.matches.items
+      .properties.context;
+
+    expect(contextSchema.required).toEqual(['highlighted']);
+    expect(contextSchema.required).not.toContain('lines');
+  });
 });
