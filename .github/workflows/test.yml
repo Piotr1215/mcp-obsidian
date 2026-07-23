@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '**' ]
   pull_request:
     branches: [ main ]
 
@@ -31,6 +31,8 @@ jobs:
     
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
+      # Fork clones don't have CODECOV_TOKEN — don't fail the build on upload
+      continue-on-error: true
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         slug: Piotr1215/mcp-obsidian
