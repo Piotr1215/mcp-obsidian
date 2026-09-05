@@ -112,7 +112,7 @@ export function createServer(vaultPath) {
 
         let description = result.count === 0
           ? `No notes found${directory ? ` in ${directory}` : ''}`
-          : `Showing ${result.pagination.returned} of ${result.pagination.total} notes${directory ? ` in ${directory}` : ''}`;
+          : `Showing ${result.pagination.returned} of ${result.pagination.total} notes${directory ? ` in ${directory}` : ''}\n\n${result.notes.join('\n')}`;
 
         if (result.pagination.hasMore) {
           const nextOffset = offset + limit;
