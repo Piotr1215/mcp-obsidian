@@ -22,7 +22,6 @@ This server instead works directly with Obsidian vault files on disk, making it 
 - **High performance** with execution time tracking and resource limits
 - **Rich search capabilities** including regex support and tag-based search
 - **Metadata support** with frontmatter and inline tag parsing
-- **MCP Resources** for HATEOAS-style discovery and navigation
 
 ## Recent Updates
 
@@ -195,9 +194,23 @@ than taken from the caller's argument. Refusing keeps the note and the tool
 reports that it did not delete. A decline, a cancel, a timeout and a dead
 transport all count as a refusal.
 
+Some clients advertise elicitation and then answer it themselves without showing
+anyone. Codex 0.153.4 returns a decline in about 10ms on its programmatic tool
+path. The note is kept either way, and the tool says the client answered rather
+than blaming you for a prompt you never saw.
+
 Clients that do not advertise elicitation delete without a prompt, as before.
 Set `OBSIDIAN_MCP_CONFIRM_DELETE=off` to turn the prompt off for clients that
 do.
+
+### append-note
+Add content to an existing note without overwriting it, creating the note if it
+is absent. `write-note` replaces the whole file; this one does not.
+
+- `section` appends under a specific heading rather than at the end
+- `ensureNewline` (default true) keeps the appended block from running into the
+  previous line
+
 
 ### search-by-tags
 Find notes containing specific tags.
@@ -250,35 +263,6 @@ Found 10 MOCs
 ```
 
 This tool enables agents to understand your knowledge graph structure instantly, making navigation ~10x faster than blind keyword searching.
-
-## MCP Resources
-
-This server implements MCP resource support for HATEOAS-style discovery:
-
-- **Automatic Resource Links**: All search and list tools return resource links
-- **Direct Note Access**: Use resource URIs to read notes without searching
-- **Resource URI Format**: `obsidian-note://relative/path/to/note.md`
-- **Rich Metadata**: Resource links include tags, titles, and match counts
-
-**Example**: When you search for "MCP", results include resource links:
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Found 5 matches in 2 files for \"MCP\""
-    },
-    {
-      "type": "resource_link",
-      "uri": "obsidian-note://guides/MCP-Guide.md",
-      "name": "MCP Implementation Guide",
-      "description": "3 matches | Tags: mcp, guide, development"
-    }
-  ]
-}
-```
-
-Agents can then directly read the note using the resource URI, enabling seamless navigation through your knowledge base.
 
 ## Security Features
 
