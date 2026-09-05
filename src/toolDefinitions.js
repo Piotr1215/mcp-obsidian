@@ -417,7 +417,7 @@ export const toolDefinitions = [
   {
     name: 'delete-note',
     title: 'Delete Note',
-    description: 'Delete a note',
+    description: 'Delete a note permanently. The user is asked to confirm first, and may refuse, in which case the note is kept and the tool says so. Read the result rather than assuming the deletion happened.',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -430,6 +430,39 @@ export const toolDefinitions = [
         },
       },
       required: ['path'],
+      additionalProperties: false
+    },
+    // Output is just a success message, so no outputSchema
+  },
+  {
+    name: 'append-note',
+    title: 'Append to Note',
+    description: 'Append content to an existing note or create a new note. Unlike write-note which overwrites, this preserves existing content and adds new content at the end or under a specific heading.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the note relative to vault root',
+          minLength: 1,
+          pattern: '\\.md$'
+        },
+        content: {
+          type: 'string',
+          description: 'Content to append to the note',
+        },
+        section: {
+          type: 'string',
+          description: 'Optional heading name to append content under. Content will be inserted after this heading but before the next heading of same or higher level.',
+        },
+        ensureNewline: {
+          type: 'boolean',
+          description: 'Ensure content starts on a new line (default: true)',
+          default: true
+        },
+      },
+      required: ['path', 'content'],
       additionalProperties: false
     },
     // Output is just a success message, so no outputSchema

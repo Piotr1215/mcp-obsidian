@@ -3,9 +3,10 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { searchVault, searchByTitle, listNotes, readNote, writeNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
+import { searchVault, searchByTitle, listNotes, readNote, writeNote, appendNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
 import { toolDefinitions } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
+import { createDeleteConfirmer } from './confirm.js';
 import { textResponse, structuredResponse, errorResponse, createMetadata, stripSearchContext } from './response-formatter.js';
 
 export function createServer(vaultPath) {
@@ -148,10 +149,34 @@ export function createServer(vaultPath) {
 
       case 'delete-note': {
         const { path: notePath } = args;
-        await deleteNote(vaultPath, notePath);
-        
-        const metadata = createMetadata(startTime, { tool: 'delete-note' });
-        return textResponse(`Note deleted successfully: ${notePath}`, metadata);
+        const outcome = await deleteNote(vaultPath, notePath, {
+          confirm: createDeleteConfirmer(server),
+        });
+
+        const metadata = createMetadata(startTime, {
+          tool: 'delete-note',
+          deleted: outcome.deleted
+        });
+        // A refusal is reported, not thrown. Saying it plainly matters more than
+        // usual here: the model must not read a kept note as a deleted one.
+        return outcome.deleted
+          ? textResponse(`Note deleted successfully: ${notePath}`, metadata)
+          : textResponse(`Note NOT deleted, ${outcome.reason}: ${notePath}`, metadata);
+      }
+
+      case 'append-note': {
+        const { path: notePath, content, section, ensureNewline = true } = args;
+        await appendNote(vaultPath, notePath, content, { section, ensureNewline });
+
+        const metadata = createMetadata(startTime, {
+          tool: 'append-note',
+          contentLength: content.length,
+          hasSection: !!section
+        });
+        const message = section
+          ? `Content appended to ${notePath} under section "${section}"`
+          : `Content appended to ${notePath}`;
+        return textResponse(message, metadata);
       }
 
       case 'search-by-tags': {
