@@ -4,7 +4,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { searchVault, searchByTitle, listNotes, readNote, writeNote, appendNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
-import { toolDefinitions } from './toolDefinitions.js';
+import { toolDefinitions, DELETE_NOTE_DESCRIPTION } from './toolDefinitions.js';
 import { Errors, MCPError } from './errors.js';
 import { createDeleteConfirmer } from './confirm.js';
 import { textResponse, structuredResponse, errorResponse, createMetadata, stripSearchContext } from './response-formatter.js';
@@ -24,9 +24,33 @@ export function createServer(vaultPath) {
     }
   );
 
-  // Define available tools
+  // Optional features are negotiated once, when the client connects, rather
+  // than re-derived on every call. A client that does not advertise elicitation
+  // never loads the confirmation feature at all, and delete-note then behaves
+  // exactly as it did before the feature existed: a normal delete, nothing
+  // asked. Resolving it here rather than per-call is what makes it a property
+  // of the session instead of a coincidence repeated on each request.
+  const features = { confirmDelete: null };
+
+  server.oninitialized = () => {
+    features.confirmDelete = createDeleteConfirmer(server, {
+      // Unload on proof, not on suspicion: the client advertised the
+      // capability and then answered without a human. Later calls take the
+      // plain path instead of re-asking a client that will never show it.
+      onUnsupported: () => { features.confirmDelete = null; },
+    });
+  };
+
+  // Define available tools. delete-note advertises the confirmation only when
+  // it was actually loaded, so the model is never told to expect a prompt this
+  // client cannot show.
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: toolDefinitions,
+    tools: toolDefinitions.map(tool =>
+      tool.name === 'delete-note'
+        ? { ...tool, description: features.confirmDelete
+            ? DELETE_NOTE_DESCRIPTION.confirming
+            : DELETE_NOTE_DESCRIPTION.plain }
+        : tool),
   }));
 
   // Handle tool calls
@@ -150,7 +174,7 @@ export function createServer(vaultPath) {
       case 'delete-note': {
         const { path: notePath } = args;
         const outcome = await deleteNote(vaultPath, notePath, {
-          confirm: createDeleteConfirmer(server),
+          confirm: features.confirmDelete,
         });
 
         const metadata = createMetadata(startTime, {
