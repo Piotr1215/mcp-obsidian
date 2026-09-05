@@ -415,8 +415,14 @@ function escapeRegex(string) {
 
 /**
  * Delete note (I/O function with validation)
+ *
+ * `confirm` is an optional async gate, called once the note is known to exist
+ * and immediately before it is unlinked, so there is no window in which the
+ * check has passed but the file has changed. It receives { notePath, fullPath }
+ * and returns { confirmed, reason }. Passing nothing deletes without asking,
+ * which is what a client that cannot be asked gets; see createDeleteConfirmer.
  */
-export async function deleteNote(vaultPath, notePath) {
+export async function deleteNote(vaultPath, notePath, { confirm } = {}) {
   // Pure validations
   const paramValidation = validateRequiredParameters({ path: notePath }, ['path']);
   assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
@@ -436,10 +442,19 @@ export async function deleteNote(vaultPath, notePath) {
     throw Errors.resourceNotFound(notePath, { path: notePath });
   }
   
+  // Ask a human, if there is one to ask. A refusal is an outcome, not a fault:
+  // the caller reports it and the note stays where it is.
+  if (confirm) {
+    const { confirmed, reason } = await confirm({ notePath, fullPath });
+    if (!confirmed) {
+      return { deleted: false, path: notePath, reason };
+    }
+  }
+
   // I/O: Delete file
   try {
     await unlink(fullPath);
-    return notePath;
+    return { deleted: true, path: notePath };
   } catch (error) {
     if (error.code === 'ENOENT') {
       throw Errors.resourceNotFound(notePath, { path: notePath });

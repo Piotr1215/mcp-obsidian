@@ -417,7 +417,7 @@ export const toolDefinitions = [
   {
     name: 'delete-note',
     title: 'Delete Note',
-    description: 'Delete a note',
+    description: 'Delete a note permanently. The user is asked to confirm first, and may refuse, in which case the note is kept and the tool says so. Read the result rather than assuming the deletion happened.',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',

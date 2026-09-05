@@ -267,7 +267,42 @@ describe('Tools module', () => {
       const result = await deleteNote(mockVaultPath, 'delete-me.md');
 
       expect(unlink).toHaveBeenCalledWith('/test/vault/delete-me.md');
-      expect(result).toBe('delete-me.md');
+      expect(result).toEqual({ deleted: true, path: 'delete-me.md' });
+    });
+
+    it('should not delete when the confirm gate refuses', async () => {
+      access.mockResolvedValue();
+      unlink.mockResolvedValue();
+      const confirm = vi.fn().mockResolvedValue({ confirmed: false, reason: 'you declined' });
+
+      const result = await deleteNote(mockVaultPath, 'keep-me.md', { confirm });
+
+      expect(confirm).toHaveBeenCalledWith({
+        notePath: 'keep-me.md',
+        fullPath: '/test/vault/keep-me.md'
+      });
+      expect(unlink).not.toHaveBeenCalled();
+      expect(result).toEqual({ deleted: false, path: 'keep-me.md', reason: 'you declined' });
+    });
+
+    it('should delete when the confirm gate agrees', async () => {
+      access.mockResolvedValue();
+      unlink.mockResolvedValue();
+      const confirm = vi.fn().mockResolvedValue({ confirmed: true, reason: 'confirmed' });
+
+      const result = await deleteNote(mockVaultPath, 'delete-me.md', { confirm });
+
+      expect(unlink).toHaveBeenCalledWith('/test/vault/delete-me.md');
+      expect(result).toEqual({ deleted: true, path: 'delete-me.md' });
+    });
+
+    it('should not ask for confirmation for a note that does not exist', async () => {
+      access.mockRejectedValue(new Error('ENOENT'));
+      const confirm = vi.fn();
+
+      await expect(deleteNote(mockVaultPath, 'gone.md', { confirm })).rejects.toThrow();
+
+      expect(confirm).not.toHaveBeenCalled();
     });
 
     it('should handle nested paths', async () => {

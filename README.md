@@ -187,9 +187,17 @@ Create or update a note with new content.
 - Content size validation
 
 ### delete-note
-Delete a note from your vault.
-- Safe deletion with proper validation
-- Path security checks
+Delete a note from your vault. Permanent, there is no trash.
+
+Clients that support MCP elicitation are asked to confirm first, and the prompt
+shows the note's size, modification date and first line, read off disk rather
+than taken from the caller's argument. Refusing keeps the note and the tool
+reports that it did not delete. A decline, a cancel, a timeout and a dead
+transport all count as a refusal.
+
+Clients that do not advertise elicitation delete without a prompt, as before.
+Set `OBSIDIAN_MCP_CONFIRM_DELETE=off` to turn the prompt off for clients that
+do.
 
 ### search-by-tags
 Find notes containing specific tags.
@@ -281,6 +289,7 @@ This server implements comprehensive security measures:
 - **File Size Limits**: Configurable limits prevent memory exhaustion (default: 10MB)
 - **Content Sanitization**: Removes potentially harmful null bytes
 - **Markdown-only Access**: Only `.md` files can be accessed
+- **Human Confirmation Before Deletion**: `delete-note` asks the user over MCP elicitation, so the go-ahead comes from a person rather than from an argument the model composed. Path validation stops a traversal but not a deletion of the wrong note inside the vault; this is what covers that.
 
 See [MCP_SPEC_COMPLIANCE.md](./MCP_SPEC_COMPLIANCE.md) for detailed compliance information.
 
