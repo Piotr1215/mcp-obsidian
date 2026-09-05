@@ -21,6 +21,12 @@ import { config } from './config.js';
 const PREVIEW_BYTES = 512;
 const PREVIEW_MAX_CHARS = 100;
 
+// Below this, an answer cannot have come from a person: the client has to render
+// the prompt, and someone has to read a path and a preview before deciding. Half
+// a second leaves room for the fastest reflexive keypress and still catches a
+// client answering on its own by two orders of magnitude.
+const UNATTENDED_ANSWER_MS = 500;
+
 /**
  * Read a one-line human-recognisable summary of a note straight from disk.
  * Never throws: a preview is a courtesy, and failing to build one must not stop
@@ -94,6 +100,7 @@ export function createDeleteConfirmer(server, options = {}) {
       ...preview,
     ].join('\n');
 
+    const askedAt = Date.now();
     let result;
     try {
       result = await server.elicitInput({
@@ -115,7 +122,20 @@ export function createDeleteConfirmer(server, options = {}) {
     }
 
     if (result?.action !== 'accept') {
-      return { confirmed: false, reason: `you did not confirm (${result?.action ?? 'no answer'})` };
+      const action = result?.action ?? 'no answer';
+      // Do not report a refusal as the human's when the human was never asked.
+      // `decline` claims a person said no; only `cancel` means no answer was
+      // available, and a client that conflates them makes the server lie about
+      // who refused. Measured against Codex 0.153.4, which advertises
+      // elicitation (`{"elicitation":{"form":{},"url":{}}}`) and then returns
+      // `decline` in about 10ms with nothing rendered. The elapsed time is
+      // timed here rather than assumed, and it is the only evidence available:
+      // the wire carries no way to tell the two apart.
+      const elapsed = Date.now() - askedAt;
+      const reason = elapsed < UNATTENDED_ANSWER_MS
+        ? `your MCP client answered "${action}" itself in ${elapsed}ms without showing you a prompt`
+        : `you did not confirm (${action})`;
+      return { confirmed: false, reason };
     }
     if (result?.content?.confirm !== true) {
       return { confirmed: false, reason: 'you declined' };

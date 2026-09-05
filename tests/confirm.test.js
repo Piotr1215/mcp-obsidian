@@ -142,3 +142,42 @@ describe('the prompt describes the note on disk, not the argument', () => {
     expect(params.requestedSchema.properties.confirm.description).toContain('no trash');
   });
 });
+
+/**
+ * A refusal has two authors: the human, or the client answering for them. The
+ * wire cannot tell them apart, both arrive as `action`, so the round-trip time
+ * is the only evidence there is. Getting this wrong tells someone they declined
+ * a deletion they were never shown.
+ */
+describe('who actually refused', () => {
+  const declines = () => vi.fn().mockResolvedValue({ action: 'decline' });
+
+  it('blames the client when the answer comes back faster than a human could give it', async () => {
+    const confirm = createDeleteConfirmer(elicitingClient(declines()));
+
+    const result = await confirm({ notePath: 'a.md', fullPath: '/nope/a.md' });
+
+    expect(result.confirmed).toBe(false);
+    expect(result.reason).toMatch(/client answered "decline" itself in \d+ms/);
+    expect(result.reason).toContain('without showing you a prompt');
+  });
+
+  it('blames the human when the answer took long enough to be one', async () => {
+    const elicit = vi.fn(() => new Promise(resolve =>
+      setTimeout(() => resolve({ action: 'decline' }), 550)));
+    const confirm = createDeleteConfirmer(elicitingClient(elicit));
+
+    const result = await confirm({ notePath: 'a.md', fullPath: '/nope/a.md' });
+
+    expect(result.reason).toBe('you did not confirm (decline)');
+  });
+
+  // A timeout is neither: it never reached anyone and it took the full wait.
+  it('keeps the transport failure distinct from both', async () => {
+    const elicit = vi.fn().mockRejectedValue(new Error('Request timed out'));
+    const confirm = createDeleteConfirmer(elicitingClient(elicit));
+
+    const result = await confirm({ notePath: 'a.md', fullPath: '/nope/a.md' });
+    expect(result.reason).toContain('could not reach you to confirm');
+  });
+});
