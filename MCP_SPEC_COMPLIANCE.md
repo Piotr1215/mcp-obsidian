@@ -140,7 +140,7 @@ All tools follow kebab-case naming convention.
 ### 4.1 Path Traversal Prevention ✅
 **Specification Requirement**: Servers must validate inputs to prevent security vulnerabilities.
 
-**Implementation** (`src/validation.js` and `src/security.js`):
+**Implementation** (`src/validation.js`):
 ```javascript
 export function validatePathWithinBase(basePath, targetPath) {
   // Prevents accessing files outside vault

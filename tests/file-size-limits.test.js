@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, rm, writeFile } from 'fs/promises';
 import path from 'path';
 import { readNote, searchVault } from '../src/tools.js';
-import { validateFileSize } from '../src/security.js';
+import { validateFileSize } from '../src/validation.js';
 import { config } from '../src/config.js';
 import { MCPError } from '../src/errors.js';
 
@@ -17,40 +17,31 @@ describe('File Size Limits', () => {
     await rm(testVault, { recursive: true, force: true });
   });
 
+  // The size check that ships is pure: tools.js stats the file itself and hands
+  // the number here. Testing it against real 11MB files exercised a wrapper that
+  // production never called, and paid a second of IO per run to do it.
   describe('validateFileSize', () => {
-    it('should accept files within size limit', async () => {
-      const smallFile = path.join(testVault, 'small.md');
-      await writeFile(smallFile, 'Small content');
-      
-      const size = await validateFileSize(smallFile);
-      expect(size).toBeLessThan(config.limits.maxFileSize);
+    it('accepts a size within the limit', () => {
+      expect(validateFileSize(1024, config.limits.maxFileSize)).toMatchObject({ valid: true });
     });
 
-    it('should reject files exceeding size limit', async () => {
-      const largeFile = path.join(testVault, 'large.md');
-      // Create a file larger than 10MB
-      const largeContent = 'x'.repeat(11 * 1024 * 1024);
-      await writeFile(largeFile, largeContent);
-      
-      await expect(validateFileSize(largeFile)).rejects.toThrow(MCPError);
-      
-      try {
-        await validateFileSize(largeFile);
-      } catch (error) {
-        expect(error.message).toMatch(/File too large/);
-        expect(error.data.size).toBeGreaterThan(config.limits.maxFileSize);
-      }
+    it('rejects a size over the limit and reports both numbers', () => {
+      const oversized = config.limits.maxFileSize + 1;
+      const result = validateFileSize(oversized, config.limits.maxFileSize);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toMatch(/File too large/);
+      expect(result.size).toBe(oversized);
     });
 
-    it('should use custom size limit when provided', async () => {
-      const file = path.join(testVault, 'custom.md');
-      await writeFile(file, 'x'.repeat(1024)); // 1KB
-      
-      // Should pass with 2KB limit
-      await expect(validateFileSize(file, 2048)).resolves.toBeDefined();
-      
-      // Should fail with 512B limit
-      await expect(validateFileSize(file, 512)).rejects.toThrow(/File too large/);
+    it('honours a caller-supplied limit', () => {
+      expect(validateFileSize(1024, 2048)).toMatchObject({ valid: true });
+      expect(validateFileSize(1024, 512)).toMatchObject({ valid: false });
+    });
+
+    it('rejects a size that is not a number, rather than letting it pass', () => {
+      expect(validateFileSize(undefined, 2048)).toMatchObject({ valid: false });
+      expect(validateFileSize(-1, 2048)).toMatchObject({ valid: false });
     });
   });
 
