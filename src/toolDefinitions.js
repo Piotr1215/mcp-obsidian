@@ -1,3 +1,17 @@
+/**
+ * delete-note describes itself differently depending on what the connected
+ * client can do. The confirmation is an optional feature, negotiated at
+ * connect: a client that cannot be asked never loads it, and must not be told
+ * a prompt is coming. A tool description is a prompt to the model, so an
+ * unconditional "the user is asked to confirm first" is not a harmless
+ * inaccuracy, it invites the model to treat a delete as reviewed when nobody
+ * reviewed it.
+ */
+export const DELETE_NOTE_DESCRIPTION = {
+  plain: 'Delete a note permanently. There is no trash, so this cannot be undone.',
+  confirming: 'Delete a note permanently. The user is asked to confirm first, and may refuse, in which case the note is kept and the tool says so. Read the result rather than assuming the deletion happened.',
+};
+
 export const toolDefinitions = [
   {
     name: 'search-vault',
@@ -417,7 +431,7 @@ export const toolDefinitions = [
   {
     name: 'delete-note',
     title: 'Delete Note',
-    description: 'Delete a note permanently. The user is asked to confirm first, and may refuse, in which case the note is kept and the tool says so. Read the result rather than assuming the deletion happened.',
+    description: DELETE_NOTE_DESCRIPTION.plain,
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',

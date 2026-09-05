@@ -48,8 +48,11 @@ describe('createDeleteConfirmer', () => {
     expect(result.confirmed).toBe(false);
   });
 
-  it.each(['decline', 'cancel'])('keeps the note on %s', async (action) => {
-    const elicit = vi.fn().mockResolvedValue({ action });
+  // Slow on purpose: a refusal only counts as the human's if it took long
+  // enough to be one. An instant answer means the client answered, which is a
+  // different case entirely and is covered below.
+  it.each(['decline', 'cancel'])('keeps the note when a person %ss', async (action) => {
+    const elicit = vi.fn(() => new Promise(r => setTimeout(() => r({ action }), 550)));
     const confirm = createDeleteConfirmer(elicitingClient(elicit));
 
     const result = await confirm({ notePath: 'a.md', fullPath: '/nope/a.md' });
@@ -152,14 +155,29 @@ describe('the prompt describes the note on disk, not the argument', () => {
 describe('who actually refused', () => {
   const declines = () => vi.fn().mockResolvedValue({ action: 'decline' });
 
-  it('blames the client when the answer comes back faster than a human could give it', async () => {
+  // A client that advertised elicitation and then answered in milliseconds
+  // cannot show a prompt. That is indistinguishable from never advertising it,
+  // so the delete proceeds exactly as it would for a client that never did.
+  // Refusing forever would leave delete-note permanently broken on that client.
+  it('treats an instant answer as a client that cannot ask, and proceeds', async () => {
     const confirm = createDeleteConfirmer(elicitingClient(declines()));
 
     const result = await confirm({ notePath: 'a.md', fullPath: '/nope/a.md' });
 
-    expect(result.confirmed).toBe(false);
-    expect(result.reason).toMatch(/client answered "decline" itself in \d+ms/);
-    expect(result.reason).toContain('without showing you a prompt');
+    expect(result.confirmed).toBe(true);
+    expect(result.reason).toMatch(/answered "decline" itself in \d+ms/);
+    expect(result.reason).toContain('cannot confirm');
+  });
+
+  it('reports the client as unsupported so the session stops loading the feature', async () => {
+    const onUnsupported = vi.fn();
+    const confirm = createDeleteConfirmer(elicitingClient(declines()), { onUnsupported });
+
+    await confirm({ notePath: 'a.md', fullPath: '/nope/a.md' });
+
+    expect(onUnsupported).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'decline' })
+    );
   });
 
   it('blames the human when the answer took long enough to be one', async () => {
