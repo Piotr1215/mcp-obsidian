@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MCPError, Errors, ErrorCodes } from '../src/errors.js';
-import { validatePath, validateMarkdownFile, validateRequiredParams } from '../src/security.js';
 import { readNote, writeNote } from '../src/tools.js';
 import fs from 'fs/promises';
 
@@ -55,49 +54,34 @@ describe('Error Handling Unit Tests', () => {
     });
   });
 
-  describe('Security validation', () => {
-    it('should throw error for path traversal attempts', () => {
-      expect(() => {
-        validatePath('/vault', '../etc/passwd');
-      }).toThrow(MCPError);
-
-      try {
-        validatePath('/vault', '../etc/passwd');
-      } catch (error) {
-        expect(error.code).toBe(ErrorCodes.RESOURCE_ACCESS_DENIED);
-        expect(error.message).toMatch(/path traversal/i);
-      }
+  // Asserted through the tools the server exposes, not through a parallel
+  // validation layer. tools.js does its own throwing via assertValid, so a test
+  // against a separate wrapper proved nothing about what actually ships: the
+  // wrapper could have been deleted with these green, which is what happened.
+  // Path and extension checks are pure and run before any fs call, so these hold
+  // with fs/promises mocked.
+  describe('Security validation, through the shipped tool path', () => {
+    // The traversal path has to end in .md. readNote checks the extension first,
+    // so '../etc/passwd' comes back as "not markdown" and never reaches the path
+    // check at all. Asserting traversal on a non-markdown path tests the wrong
+    // guard and passes for the wrong reason.
+    it('refuses a markdown path that escapes the vault', async () => {
+      await expect(readNote('/vault', '../outside.md'))
+        .rejects.toMatchObject({ code: ErrorCodes.RESOURCE_ACCESS_DENIED });
     });
 
-    it('should allow valid paths within vault', () => {
-      const result = validatePath('/vault', 'notes/test.md');
-      expect(result).toMatch(/\/vault\/notes\/test\.md$/);
+    it('rejects a non-markdown path on the extension check, before the path check', async () => {
+      await expect(readNote('/vault', '../etc/passwd'))
+        .rejects.toMatchObject({ code: ErrorCodes.INVALID_PARAMS });
     });
 
-    it('should throw error for non-markdown files', () => {
-      expect(() => {
-        validateMarkdownFile('test.txt');
-      }).toThrow(MCPError);
-
-      try {
-        validateMarkdownFile('test.txt');
-      } catch (error) {
-        expect(error.code).toBe(ErrorCodes.INVALID_PARAMS);
-        expect(error.message).toMatch(/markdown files/i);
-      }
+    it('refuses a non-markdown target', async () => {
+      await expect(writeNote('/vault', 'test.txt', 'content'))
+        .rejects.toMatchObject({ code: ErrorCodes.INVALID_PARAMS });
     });
 
-    it('should validate required parameters', () => {
-      expect(() => {
-        validateRequiredParams({ foo: 'bar' }, ['foo', 'baz']);
-      }).toThrow(MCPError);
-
-      try {
-        validateRequiredParams({ foo: 'bar' }, ['foo', 'baz']);
-      } catch (error) {
-        expect(error.code).toBe(ErrorCodes.INVALID_PARAMS);
-        expect(error.message).toMatch(/required parameter.*baz/i);
-      }
+    it('raises MCPError, not a bare Error, so the code survives to the client', async () => {
+      await expect(readNote('/vault', '../outside.md')).rejects.toThrow(MCPError);
     });
   });
 
