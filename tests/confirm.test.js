@@ -82,7 +82,7 @@ describe('createDeleteConfirmer', () => {
         confirm: {
           type: 'boolean',
           title: 'Delete it',
-          description: 'Leave unchecked to keep the note.'
+          description: 'Permanent, the vault has no trash. Leave unchecked to keep the note.'
         }
       },
       required: ['confirm']
@@ -123,6 +123,22 @@ describe('the prompt describes the note on disk, not the argument', () => {
     const [params] = elicit.mock.calls[0];
     expect(params.message).toContain('notes/real.md');
     expect(params.message).toContain('# The real heading');
-    expect(params.message).toContain('no trash');
+  });
+
+  // Claude Code shows roughly three lines of the message and hides the rest
+  // behind "(+N more lines)". The identifying detail is the reason to ask a
+  // human at all, so it must not be what gets hidden: no blank spacers, and the
+  // warning lives in the field description, which renders in full.
+  it('keeps the message inside what the client actually renders', async () => {
+    const elicit = vi.fn().mockResolvedValue({ action: 'accept', content: { confirm: true } });
+    const confirm = createDeleteConfirmer(elicitingClient(elicit));
+
+    await confirm({ notePath: 'notes/real.md', fullPath: notePath });
+
+    const [params] = elicit.mock.calls[0];
+    const lines = params.message.split('\n');
+    expect(lines.length).toBeLessThanOrEqual(3);
+    expect(lines.every(l => l.trim().length > 0)).toBe(true);
+    expect(params.requestedSchema.properties.confirm.description).toContain('no trash');
   });
 });

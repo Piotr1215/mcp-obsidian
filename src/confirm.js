@@ -84,11 +84,13 @@ export function createDeleteConfirmer(server, options = {}) {
   const timeout = options.timeout ?? config.timeouts.confirmation;
 
   return async ({ notePath, fullPath }) => {
+    // Claude Code renders about three lines of `message` and collapses the rest
+    // behind "(+N more lines)", so every line has to earn its place and a blank
+    // spacer costs one of them. The identifying detail goes here, in the visible
+    // budget; the warning moves to the field description, which renders in full.
     const preview = await describeNote(fullPath);
     const message = [
-      'Delete this note? This is permanent, the vault has no trash.',
-      '',
-      notePath,
+      `Delete ${notePath}?`,
       ...preview,
     ].join('\n');
 
@@ -102,7 +104,7 @@ export function createDeleteConfirmer(server, options = {}) {
             confirm: {
               type: 'boolean',
               title: 'Delete it',
-              description: 'Leave unchecked to keep the note.',
+              description: 'Permanent, the vault has no trash. Leave unchecked to keep the note.',
             },
           },
           required: ['confirm'],
