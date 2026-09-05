@@ -80,9 +80,14 @@ export function extractInlineTags(content) {
   const contentWithoutCode = removeCodeBlocks(content);
   
   const tags = [];
-  // Match hashtags that are not part of headings
-  // Tag name can contain letters, numbers, underscore, hyphen, plus, dot, and forward slash
-  const inlineTagRegex = /(?:^|[^#\w])#([a-zA-Z0-9_\-+.\/]+?)(?=[^a-zA-Z0-9_\-+\/]|$)/gm;
+  // Match hashtags that are not part of headings.
+  // Tag name can contain letters, numbers, underscore, hyphen, plus, dot and
+  // forward slash, in any script. The classes are Unicode property escapes
+  // rather than a-zA-Z0-9 because a vault is not written in English: the ASCII
+  // form dropped #проект and #标签 entirely, and truncated #café to "caf",
+  // which is worse than dropping it because the wrong tag looks like a real
+  // one. \p{M} keeps decomposed accents attached to the letter they modify.
+  const inlineTagRegex = /(?:^|[^#\p{L}\p{N}\p{M}_])#([\p{L}\p{N}\p{M}_\-+.\/]+?)(?=[^\p{L}\p{N}\p{M}_\-+\/]|$)/gmu;
   let match;
   
   while ((match = inlineTagRegex.exec(contentWithoutCode)) !== null) {
