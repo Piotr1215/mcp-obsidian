@@ -11,7 +11,6 @@ export const ErrorCodes = {
   // MCP specific error codes
   RESOURCE_NOT_FOUND: -32002,
   RESOURCE_ACCESS_DENIED: -32003,
-  TOOL_NOT_FOUND: -32004,
 };
 
 /**
