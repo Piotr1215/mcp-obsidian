@@ -14,6 +14,7 @@ import { extractWikilinks, isMoc } from './links.js';
 import { assertVaultReadable } from './vault.js';
 import {
   isIgnoredPath,
+  makeRelativePath,
   validatePathWithinBase, 
   validateMarkdownExtension, 
   validateRequiredParameters,
@@ -194,7 +195,7 @@ export async function listNotes(vaultPath, directory, limit = 100, offset = 0) {
 
 
   const files = await findNotes(vaultPath, directory);
-  const allNotes = files.map(file => path.relative(vaultPath, file)).sort();
+  const allNotes = files.map(file => makeRelativePath(file, vaultPath)).sort();
 
   // Apply pagination
   const { items: paginatedNotes, pagination } = paginateArray(allNotes, limit, offset);
@@ -231,7 +232,7 @@ async function resolveNotePath(vaultPath, notePath) {
   }
 
   // Multiple matches - report ambiguity
-  const relativePaths = matches.map(m => path.relative(vaultPath, m)).join(', ');
+  const relativePaths = matches.map(m => makeRelativePath(m, vaultPath)).join(', ');
   throw Errors.invalidParams(
     `Ambiguous path "${notePath}" matches multiple notes: ${relativePaths}. Please specify the full path.`,
     { path: notePath, matches: relativePaths }
@@ -501,7 +502,7 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
       
       if (hasAllTags(fileTags, searchTags, caseSensitive)) {
         results.push({
-          path: path.relative(vaultPath, file),
+          path: makeRelativePath(file, vaultPath),
           tags: fileTags
         });
       }
@@ -584,7 +585,7 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
       const content = await readFile(file, 'utf-8');
 
       // Pure: Extract metadata
-      const metadata = extractNoteMetadata(content, path.relative(vaultPath, file));
+      const metadata = extractNoteMetadata(content, makeRelativePath(file, vaultPath));
       metadataResults.push({ file, metadata });
     } catch (error) {
       metadataResults.push({ file, error });
@@ -661,7 +662,7 @@ export async function discoverMocs(vaultPath, options = {}) {
       const linkedNotes = extractWikilinks(content);
 
       // Build MOC entry
-      const relativePath = path.relative(vaultPath, file);
+      const relativePath = makeRelativePath(file, vaultPath);
       const moc = {
         path: relativePath,
         title: titleData.title,

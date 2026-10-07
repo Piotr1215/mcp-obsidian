@@ -11,7 +11,8 @@ import { makeRelativePath } from '../src/validation.js';
  * in a pattern as an escape, so C:\Users\me\Vault\**\*.md matched nothing.
  * The same mistake broke any folder whose name glob reads as syntax: a vault
  * called "Notes [Work]" listed no notes on every OS. Folders now reach glob
- * as its working directory, never as part of the pattern.
+ * as its working directory, never as part of the pattern. Results separate
+ * folders with / on every OS, as Obsidian's own vault paths do.
  *
  * The Windows CI job runs this file on a real Windows file system.
  */
@@ -24,9 +25,6 @@ const callTool = (server, name, args) =>
 
 const structured = async (vault, name, args = {}) =>
   (await callTool(createServer(vault), name, args)).structuredContent;
-
-// Paths come back with the platform's separator.
-const native = (relative) => join(...relative.split('/'));
 
 describe('a vault whose folder names look like glob syntax', () => {
   let root;
@@ -56,44 +54,44 @@ describe('a vault whose folder names look like glob syntax', () => {
 
     expect(notes).toEqual([
       'Index.md',
-      native('Meetings/Standup [2026-10-07].md'),
+      'Meetings/Standup [2026-10-07].md',
       'Plain.md',
-      native('Projects [A]/Plan.md')
+      'Projects [A]/Plan.md'
     ].sort());
   });
 
   it('lists a subfolder whose name looks like a character class', async () => {
     const { notes } = await structured(vault, 'list-notes', { directory: 'Projects [A]' });
 
-    expect(notes).toEqual([native('Projects [A]/Plan.md')]);
+    expect(notes).toEqual(['Projects [A]/Plan.md']);
   });
 
   it('returns search results relative to the vault', async () => {
     const { files } = await structured(vault, 'search-vault', { query: 'alpha' });
 
     expect(files.map(f => f.path).sort()).toEqual([
-      native('Meetings/Standup [2026-10-07].md'),
+      'Meetings/Standup [2026-10-07].md',
       'Plain.md',
-      native('Projects [A]/Plan.md')
+      'Projects [A]/Plan.md'
     ].sort());
   });
 
   it('returns title matches relative to the vault', async () => {
     const { results } = await structured(vault, 'search-by-title', { query: 'plan' });
 
-    expect(results).toEqual([{ file: native('Projects [A]/Plan.md'), title: 'Plan', line: 1 }]);
+    expect(results).toEqual([{ file: 'Projects [A]/Plan.md', title: 'Plan', line: 1 }]);
   });
 
   it('finds notes by tag', async () => {
     const { notes } = await structured(vault, 'search-by-tags', { tags: ['shared'] });
 
-    expect(notes.map(n => n.path)).toEqual(['Plain.md', native('Projects [A]/Plan.md')]);
+    expect(notes.map(n => n.path)).toEqual(['Plain.md', 'Projects [A]/Plan.md']);
   });
 
   it('returns batch metadata paths relative to the vault', async () => {
     const { notes } = await structured(vault, 'get-note-metadata', { batch: true, path: 'Projects [A]' });
 
-    expect(notes.map(n => n.path)).toEqual([native('Projects [A]/Plan.md')]);
+    expect(notes.map(n => n.path)).toEqual(['Projects [A]/Plan.md']);
   });
 
   it('discovers MOCs', async () => {
@@ -112,7 +110,7 @@ describe('a vault whose folder names look like glob syntax', () => {
 
 describe('makeRelativePath on Windows', () => {
   it.runIf(process.platform === 'win32')('makes a backslash path relative to its vault', () => {
-    expect(makeRelativePath('C:\\Users\\me\\Vault\\sub\\a.md', 'C:\\Users\\me\\Vault')).toBe('sub\\a.md');
+    expect(makeRelativePath('C:\\Users\\me\\Vault\\sub\\a.md', 'C:\\Users\\me\\Vault')).toBe('sub/a.md');
   });
 
   // path.relative returns an absolute path across drives; that is not inside the vault.

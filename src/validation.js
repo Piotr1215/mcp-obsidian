@@ -54,7 +54,8 @@ export function validatePathWithinBase(basePath, targetPath) {
 
 /**
  * Makes a path relative to a base path (pure function). Uses the platform's
- * path rules, so C:\\Vault\\a.md under C:\\Vault is a.md on Windows.
+ * path rules, so C:\\Vault\\sub\\a.md under C:\\Vault is sub/a.md on Windows.
+ * The result separates folders with / on every OS, as Obsidian's vault paths do.
  * @param {string} absolutePath - The absolute path
  * @param {string} basePath - The base path
  * @returns {string} Relative path, or the path unchanged when it is not under the base
@@ -67,7 +68,7 @@ export function makeRelativePath(absolutePath, basePath) {
   const relative = path.relative(basePath, absolutePath);
   const outside = relative === '' || relative === '..' ||
     relative.startsWith('..' + path.sep) || path.isAbsolute(relative);
-  return outside ? absolutePath : relative;
+  return outside ? absolutePath : relative.split(path.sep).join('/');
 }
 
 /**
