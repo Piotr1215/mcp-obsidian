@@ -53,6 +53,18 @@ export function validatePathWithinBase(basePath, targetPath) {
 }
 
 /**
+ * Checks whether a file sits in one of the ignored vault directories (pure function)
+ * @param {string} basePath - The vault root
+ * @param {string} filePath - Absolute path to a file in the vault
+ * @param {string[]} ignoredDirectories - Directories relative to the vault root
+ * @returns {boolean} True if the file should be skipped
+ */
+export function isIgnoredPath(basePath, filePath, ignoredDirectories) {
+  const relative = path.relative(basePath, filePath).split(path.sep).join('/');
+  return ignoredDirectories.some(dir => relative === dir || relative.startsWith(dir + '/'));
+}
+
+/**
  * Validates that a file has markdown extension (pure function)
  * @param {string} filePath - The file path to validate
  * @returns {object} Validation result with {valid: boolean, error?: string}

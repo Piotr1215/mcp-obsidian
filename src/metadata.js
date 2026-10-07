@@ -2,6 +2,9 @@
  * Pure functional utilities for metadata extraction
  */
 
+import { extractPageProperties, titleFromFilename, findTitlePropertyLine } from './logseq.js';
+import { extractBracketTags } from './tags.js';
+
 /**
  * Extracts frontmatter from markdown content (pure function)
  * @param {string} content - The markdown content
@@ -9,9 +12,11 @@
  */
 export function extractFrontmatter(content) {
   if (!content || !content.trim().startsWith('---')) {
+    // No YAML block: a Logseq page keeps the same metadata as `key:: value` lines
+    const { properties, body } = extractPageProperties(content || '');
     return {
-      frontmatter: {},
-      contentWithoutFrontmatter: content || ''
+      frontmatter: properties,
+      contentWithoutFrontmatter: body
     };
   }
   
@@ -141,6 +146,16 @@ export function extractContentPreview(content, maxLength = 200) {
 }
 
 /**
+ * Checks for a usable `title` property in parsed frontmatter (pure function)
+ * @param {object} frontmatter - Parsed frontmatter or page properties
+ * @returns {boolean} True if the title is a non-empty string or number
+ */
+export function hasTitleProperty(frontmatter) {
+  const value = frontmatter.title;
+  return (typeof value === 'string' || typeof value === 'number') && String(value).trim() !== '';
+}
+
+/**
  * Combines all metadata for a note (pure function)
  * @param {string} content - The markdown content
  * @param {string} path - The file path
@@ -148,14 +163,25 @@ export function extractContentPreview(content, maxLength = 200) {
  */
 export function extractNoteMetadata(content, path) {
   const { frontmatter, contentWithoutFrontmatter } = extractFrontmatter(content);
-  const inlineTags = extractInlineTags(contentWithoutFrontmatter);
-  
+  const inlineTags = [...new Set([
+    ...extractInlineTags(contentWithoutFrontmatter),
+    ...extractBracketTags(contentWithoutFrontmatter)
+  ])];
+
   // Extract H1 title
   const titleMatch = contentWithoutFrontmatter.match(/^#\s+(.+)$/m);
-  const title = titleMatch ? titleMatch[1].trim() : null;
-  const titleLine = titleMatch ? 
-    content.split('\n').findIndex(line => line.trim() === `# ${title}`) + 1 : 
+  let title = titleMatch ? titleMatch[1].trim() : null;
+  let titleLine = titleMatch ?
+    content.split('\n').findIndex(line => line.trim() === `# ${title}`) + 1 :
     null;
+
+  // No H1: fall back to a title property, then the file name, as Logseq does
+  if (!title && hasTitleProperty(frontmatter)) {
+    title = String(frontmatter.title).trim();
+    titleLine = findTitlePropertyLine(content);
+  } else if (!title && path) {
+    title = titleFromFilename(path);
+  }
   
   const hasContent = contentWithoutFrontmatter.trim().length > 0;
   const contentPreview = extractContentPreview(content);
