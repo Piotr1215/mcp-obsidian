@@ -11,6 +11,7 @@ import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
 import { resolveTitle, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
 import { extractWikilinks, isMoc } from './links.js';
+import { assertVaultReadable } from './vault.js';
 import {
   isIgnoredPath,
   validatePathWithinBase, 
@@ -21,9 +22,11 @@ import {
 } from './validation.js';
 
 /**
- * Glob for notes, dropping copies in ignored vault directories
+ * Glob for notes, dropping copies in ignored vault directories. Fails when
+ * the vault itself cannot be read, which glob would report as no notes.
  */
 async function findNotes(vaultPath, pattern) {
+  await assertVaultReadable(vaultPath);
   const files = await glob(pattern);
   return files.filter(file => !isIgnoredPath(vaultPath, file, config.vault.ignoredDirectories));
 }
