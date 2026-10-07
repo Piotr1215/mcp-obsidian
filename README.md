@@ -120,6 +120,12 @@ claude mcp list
 
 You should see `obsidian` in the list of available MCP servers.
 
+### Vault path
+
+The server expands a leading `~` in the vault path, since MCP clients start it without a shell. It does not expand environment variables such as `$HOME`.
+
+If the server cannot read the vault, every tool that lists notes returns an error naming the cause instead of an empty result. On macOS, a vault in iCloud Drive, Documents or Desktop needs the app that starts the server, such as Claude or your terminal, to have access under System Settings > Privacy & Security > Files and Folders, or Full Disk Access.
+
 ## Available Tools
 
 ### search-vault
