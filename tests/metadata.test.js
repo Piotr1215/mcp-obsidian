@@ -6,6 +6,7 @@ import {
   extractNoteMetadata,
   transformBatchMetadata
 } from '../src/metadata.js';
+import { extractInlineTags as extractInlineTagsForSearch } from '../src/tags.js';
 
 describe('Metadata Pure Functions', () => {
   describe('extractFrontmatter', () => {
@@ -104,6 +105,25 @@ array: [item1, item2]
     it('should handle empty content', () => {
       expect(extractInlineTags('')).toEqual([]);
       expect(extractInlineTags(null)).toEqual([]);
+    });
+
+    // get-note-metadata reported inline tags through its own ASCII-only
+    // pattern after search-by-tags learned other scripts (#7), so the same
+    // note listed #café as "caf" here and "café" there.
+    it.each([
+      ['#проект', ['проект']],
+      ['#标签', ['标签']],
+      ['#café', ['café']],
+      ['#Ελληνικά and #english', ['Ελληνικά', 'english']],
+      ['#work/active', ['work/active']]
+    ])('extracts %s whole', (content, expected) => {
+      expect(extractInlineTags(content)).toEqual(expected);
+    });
+
+    it('agrees with the tags search-by-tags reads', () => {
+      const content = '# Heading\n#проект #café #work/active, see page#anchor\n```\n#in-code\n```\n#проект';
+
+      expect(extractInlineTags(content)).toEqual([...new Set(extractInlineTagsForSearch(content))]);
     });
   });
   
