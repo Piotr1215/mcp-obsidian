@@ -8,16 +8,25 @@ import { config } from './config.js';
 // Import pure functions
 import { findMatchesInContent, findMatchesWithOperators, transformSearchResults, paginateSearchResults, paginateArray } from './search.js';
 import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
-import { extractH1Title, titleMatchesQuery, transformTitleResults } from './title-search.js';
+import { resolveTitle, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
 import { extractWikilinks, isMoc } from './links.js';
-import { 
+import {
+  isIgnoredPath,
   validatePathWithinBase, 
   validateMarkdownExtension, 
   validateRequiredParameters,
   validateFileSize as validateFileSizePure,
   sanitizeContent as sanitizeContentPure
 } from './validation.js';
+
+/**
+ * Glob for notes, dropping copies in ignored vault directories
+ */
+async function findNotes(vaultPath, pattern) {
+  const files = await glob(pattern);
+  return files.filter(file => !isIgnoredPath(vaultPath, file, config.vault.ignoredDirectories));
+}
 
 /**
  * Wrapper to convert validation results to exceptions
@@ -47,7 +56,7 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
   const searchPattern = searchPath
     ? path.join(vaultPath, searchPath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
-  const files = await glob(searchPattern);
+  const files = await findNotes(vaultPath, searchPattern);
 
   // Sort files for consistent pagination across requests
   files.sort();
@@ -75,10 +84,11 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
       let matches;
       if (hasOperators) {
         // Extract metadata for operator-based search
-        const titleData = extractH1Title(content);
+        const titleData = resolveTitle(content, file);
         const tags = extractTagsPure(content);
         const metadata = {
           title: titleData ? titleData.title : '',
+          titleLine: titleData ? titleData.line : null,
           tags
         };
 
@@ -126,7 +136,7 @@ export async function searchByTitle(vaultPath, query, searchPath, caseSensitive 
   const searchPattern = searchPath
     ? path.join(vaultPath, searchPath, '**/*.md')
     : path.join(vaultPath, '**/*.md');
-  const files = await glob(searchPattern);
+  const files = await findNotes(vaultPath, searchPattern);
 
   // Sort files for consistent pagination across requests
   files.sort();
@@ -148,7 +158,7 @@ export async function searchByTitle(vaultPath, query, searchPath, caseSensitive 
       const content = await readFile(file, 'utf-8');
 
       // Pure: Extract title
-      const titleInfo = extractH1Title(content);
+      const titleInfo = resolveTitle(content, file);
 
       if (titleInfo && titleMatchesQuery(titleInfo.title, query, caseSensitive)) {
         fileTitleMatches.push({ file, titleInfo });
@@ -185,7 +195,7 @@ export async function listNotes(vaultPath, directory, limit = 100, offset = 0) {
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
 
-  const files = await glob(searchPath);
+  const files = await findNotes(vaultPath, searchPath);
   const allNotes = files.map(file => path.relative(vaultPath, file)).sort();
 
   // Apply pagination
@@ -213,7 +223,7 @@ async function resolveNotePath(vaultPath, notePath) {
 
   const basename = path.basename(notePath);
   const searchPattern = path.join(vaultPath, '**', basename);
-  const matches = await glob(searchPattern);
+  const matches = await findNotes(vaultPath, searchPattern);
 
   if (matches.length === 0) {
     throw Errors.resourceNotFound(notePath, { path: notePath });
@@ -480,7 +490,7 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
 
-  const files = await glob(searchPattern);
+  const files = await findNotes(vaultPath, searchPattern);
 
   // Sort files for consistent results
   files.sort();
@@ -554,7 +564,7 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
     : path.join(vaultPath, '**/*.md');
 
   // I/O: Get files
-  const allFiles = await glob(searchPattern);
+  const allFiles = await findNotes(vaultPath, searchPattern);
 
   // Sort files for consistent pagination across requests
   allFiles.sort();
@@ -621,7 +631,7 @@ export async function discoverMocs(vaultPath, options = {}) {
     ? path.join(vaultPath, directory, '**/*.md')
     : path.join(vaultPath, '**/*.md');
 
-  const files = await glob(searchPattern);
+  const files = await findNotes(vaultPath, searchPattern);
 
   // Sort files for consistent results
   files.sort();
@@ -659,14 +669,14 @@ export async function discoverMocs(vaultPath, options = {}) {
       }
 
       // Pure: Extract title and wikilinks
-      const titleData = extractH1Title(content);
+      const titleData = resolveTitle(content, file);
       const linkedNotes = extractWikilinks(content);
 
       // Build MOC entry
       const relativePath = path.relative(vaultPath, file);
       const moc = {
         path: relativePath,
-        title: titleData ? titleData.title : path.basename(file, '.md'),
+        title: titleData.title,
         tags: tags,
         linkedNotes: linkedNotes,
         linkCount: linkedNotes.length

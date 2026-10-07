@@ -194,7 +194,7 @@ export const toolDefinitions = [
   {
     name: 'search-by-title',
     title: 'Search by Title',
-    description: 'Search for notes by their H1 title',
+    description: 'Search for notes by title: the first H1, else a title property (YAML or Logseq title::), else the file name',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -245,11 +245,11 @@ export const toolDefinitions = [
               },
               title: {
                 type: 'string',
-                description: 'The H1 title of the note'
+                description: 'The note title: H1, title property, or file name'
               },
               line: {
-                type: 'integer',
-                description: 'Line number where title was found',
+                type: ['integer', 'null'],
+                description: 'Line number where title was found, null when it came from the file name',
                 minimum: 1
               }
             },
@@ -484,7 +484,7 @@ export const toolDefinitions = [
   {
     name: 'search-by-tags',
     title: 'Search by Tags',
-    description: 'Search for notes by tags (supports both frontmatter and inline tags)',
+    description: 'Search for notes by tags (supports frontmatter, Logseq tags:: properties, inline #tags and #[[multi word]] tags)',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -595,15 +595,15 @@ export const toolDefinitions = [
         },
         frontmatter: {
           type: 'object',
-          description: 'Parsed frontmatter metadata'
+          description: 'Parsed frontmatter metadata, or Logseq page properties (key:: value)'
         },
         title: {
           type: ['string', 'null'],
-          description: 'H1 title from content'
+          description: 'Note title: H1, title property, or file name'
         },
         titleLine: {
           type: ['integer', 'null'],
-          description: 'Line number of title'
+          description: 'Line number of title, null when it came from the file name'
         },
         hasContent: {
           type: 'boolean',
@@ -722,7 +722,7 @@ export const toolDefinitions = [
               },
               title: {
                 type: 'string',
-                description: 'H1 title of the MOC'
+                description: 'Title of the MOC: H1, title property, or file name'
               },
               tags: {
                 type: 'array',

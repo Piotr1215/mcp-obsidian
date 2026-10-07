@@ -2,6 +2,9 @@
  * Pure functional utilities for title search operations
  */
 
+import { extractFrontmatter, hasTitleProperty } from './metadata.js';
+import { titleFromFilename, findTitlePropertyLine } from './logseq.js';
+
 /**
  * Extracts the H1 title from markdown content (pure function)
  * @param {string} content - The markdown content
@@ -29,6 +32,31 @@ export function extractH1Title(content) {
   }
   
   return null;
+}
+
+/**
+ * Resolves a note's title (pure function): the first H1, else a `title`
+ * property (YAML or Logseq), else the file name. Logseq pages rarely have an
+ * H1, so without the fallbacks they have no title at all.
+ * @param {string} content - The markdown content
+ * @param {string} filePath - Path to the note, for the file name fallback
+ * @returns {object|null} Object with title and line (null for a file name title)
+ */
+export function resolveTitle(content, filePath) {
+  const h1 = extractH1Title(content);
+  if (h1) {
+    return h1;
+  }
+
+  const { frontmatter } = extractFrontmatter(content || '');
+  if (hasTitleProperty(frontmatter)) {
+    return {
+      title: String(frontmatter.title).trim(),
+      line: findTitlePropertyLine(content)
+    };
+  }
+
+  return filePath ? { title: titleFromFilename(filePath), line: null } : null;
 }
 
 /**

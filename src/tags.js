@@ -2,6 +2,8 @@
  * Pure functional utilities for tag operations
  */
 
+import { extractPageProperties } from './logseq.js';
+
 /**
  * Extracts tags from markdown content (pure function)
  * @param {string} content - The markdown content
@@ -21,7 +23,10 @@ export function extractTags(content) {
   // Extract inline tags
   const inlineTags = extractInlineTags(content);
   inlineTags.forEach(tag => tags.add(tag));
-  
+
+  // Extract multi-word tags: #[[tag name]]
+  extractBracketTags(content).forEach(tag => tags.add(tag));
+
   return Array.from(tags);
 }
 
@@ -33,7 +38,8 @@ export function extractTags(content) {
 export function extractFrontmatterTags(content) {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
   if (!frontmatterMatch) {
-    return [];
+    // A Logseq page keeps its tags in a `tags::` page property instead
+    return extractPageProperties(content).properties.tags || [];
   }
   
   const frontmatter = frontmatterMatch[1];
@@ -92,6 +98,25 @@ export function extractInlineTags(content) {
     if (tag) tags.push(tag);
   }
   
+  return tags;
+}
+
+/**
+ * Extracts multi-word tags written as #[[tag name]] (pure function)
+ * @param {string} content - The markdown content
+ * @returns {Array<string>} Array of tag names without the brackets
+ */
+export function extractBracketTags(content) {
+  const contentWithoutCode = removeCodeBlocks(content);
+  const tags = [];
+  const bracketTagRegex = /#\[\[([^\]]+)\]\]/g;
+  let match;
+
+  while ((match = bracketTagRegex.exec(contentWithoutCode)) !== null) {
+    const tag = match[1].trim();
+    if (tag) tags.push(tag);
+  }
+
   return tags;
 }
 

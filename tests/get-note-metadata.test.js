@@ -71,7 +71,7 @@ This is a simple note without any frontmatter.`;
     });
   });
   
-  it('should handle notes with only frontmatter', async () => {
+  it('takes the title from the title property when there is no H1', async () => {
     const mockContent = `---
 title: Metadata Only
 tags: [meta]
@@ -88,8 +88,8 @@ tags: [meta]
         title: 'Metadata Only',
         tags: ['meta']
       },
-      title: null,
-      titleLine: null,
+      title: 'Metadata Only',
+      titleLine: 2,
       hasContent: false,
       contentLength: mockContent.length,
       contentPreview: ''
@@ -160,7 +160,7 @@ This note has #inline-tag and #another-tag in the content.`;
     expect(result.contentPreview.endsWith('...')).toBe(true);
   });
   
-  it('should handle empty notes', async () => {
+  it('names an empty note after its file', async () => {
     readFile.mockResolvedValue('');
     stat.mockResolvedValue({ size: 0 });
     
@@ -169,7 +169,7 @@ This note has #inline-tag and #another-tag in the content.`;
     expect(result).toMatchObject({
       path: 'empty.md',
       frontmatter: {},
-      title: null,
+      title: 'empty',
       titleLine: null,
       hasContent: false,
       contentLength: 0,

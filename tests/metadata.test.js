@@ -169,10 +169,17 @@ Content with #inline-tag.`;
       });
     });
     
-    it('should handle content without title', () => {
+    it('falls back to the file name when there is no H1 or title property', () => {
       const content = 'Just content, no title.';
-      const metadata = extractNoteMetadata(content, 'no-title.md');
-      
+      const metadata = extractNoteMetadata(content, 'folder/no-title.md');
+
+      expect(metadata.title).toBe('no-title');
+      expect(metadata.titleLine).toBeNull();
+    });
+
+    it('has no title when there is no H1, title property or path', () => {
+      const metadata = extractNoteMetadata('Just content, no title.');
+
       expect(metadata.title).toBeNull();
       expect(metadata.titleLine).toBeNull();
     });
