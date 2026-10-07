@@ -163,13 +163,6 @@ Search for content across all notes in your vault.
       "line": 42,
       "content": "Managing my dotfiles with stow",
       "context": {
-        "lines": [
-          { "number": 40, "text": "## Configuration Management", "isMatch": false },
-          { "number": 41, "text": "", "isMatch": false },
-          { "number": 42, "text": "Managing my dotfiles with stow", "isMatch": true },
-          { "number": 43, "text": "has simplified my setup process.", "isMatch": false },
-          { "number": 44, "text": "", "isMatch": false }
-        ],
         "highlighted": "Managing my **dotfiles** with stow"
       }
     }]

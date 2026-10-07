@@ -100,37 +100,14 @@ export const toolDefinitions = [
                     },
                     context: {
                       type: 'object',
-                      description: 'Context information if includeContext is true',
+                      description: 'Present when includeContext is true. The server drops the surrounding lines to save tokens; read-note returns the full note',
                       properties: {
-                        lines: {
-                          type: 'array',
-                          description: 'Surrounding lines with line numbers',
-                          items: {
-                            type: 'object',
-                            properties: {
-                              number: {
-                                type: 'integer',
-                                description: 'Line number',
-                                minimum: 1
-                              },
-                              text: {
-                                type: 'string',
-                                description: 'Line content'
-                              },
-                              isMatch: {
-                                type: 'boolean',
-                                description: 'Whether this is the matching line'
-                              }
-                            },
-                            required: ['number', 'text', 'isMatch']
-                          }
-                        },
                         highlighted: {
                           type: 'string',
                           description: 'Matching line with search terms highlighted using **'
                         }
                       },
-                      required: ['lines', 'highlighted']
+                      required: ['highlighted']
                     }
                   },
                   required: ['line', 'content']
