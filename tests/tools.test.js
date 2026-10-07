@@ -3,7 +3,8 @@ import { searchVault, listNotes, readNote, writeNote, appendNote, deleteNote } f
 
 // Mock fs and glob
 vi.mock('fs/promises');
-vi.mock('glob');
+// Keep glob's real escape(): readNote builds its fallback pattern with it.
+vi.mock('glob', async (importOriginal) => ({ ...(await importOriginal()), glob: vi.fn() }));
 
 import { readFile, writeFile, mkdir, unlink, access, stat } from 'fs/promises';
 import { glob } from 'glob';
@@ -32,7 +33,7 @@ describe('Tools module', () => {
 
       const result = await searchVault(mockVaultPath, 'test', null, false);
 
-      expect(glob).toHaveBeenCalledWith('/test/vault/**/*.md');
+      expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault', absolute: true });
       expect(readFile).toHaveBeenCalledTimes(2);
       expect(result.totalMatches).toBe(3);
       expect(result.fileCount).toBe(2);
@@ -67,7 +68,7 @@ describe('Tools module', () => {
       
       await searchVault(mockVaultPath, 'query', 'subfolder', false);
 
-      expect(glob).toHaveBeenCalledWith('/test/vault/subfolder/**/*.md');
+      expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault/subfolder', absolute: true });
     });
 
     it('should handle empty results', async () => {
@@ -106,7 +107,7 @@ describe('Tools module', () => {
 
       const result = await listNotes(mockVaultPath);
 
-      expect(glob).toHaveBeenCalledWith('/test/vault/**/*.md');
+      expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault', absolute: true });
       expect(result.count).toBe(3);
       expect(result.notes).toEqual([
         'alpha.md',
@@ -125,7 +126,7 @@ describe('Tools module', () => {
 
       const result = await listNotes(mockVaultPath, 'projects');
 
-      expect(glob).toHaveBeenCalledWith('/test/vault/projects/**/*.md');
+      expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault/projects', absolute: true });
       expect(result.count).toBe(2);
     });
 
@@ -190,7 +191,7 @@ describe('Tools module', () => {
 
       const result = await readNote(mockVaultPath, 'note.md');
 
-      expect(glob).toHaveBeenCalledWith('/test/vault/**/note.md');
+      expect(glob).toHaveBeenCalledWith('**/note.md', { cwd: '/test/vault', absolute: true });
       expect(result).toBe('# Found Note');
     });
 

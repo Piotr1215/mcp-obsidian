@@ -6,6 +6,9 @@ import { parseSearchQuery, evaluateExpression } from './search-operators.js';
 import { extractH1Title } from './title-search.js';
 import { extractTags } from './tags.js';
 import { extractContextLines, formatContextResult } from './search-context.js';
+import { makeRelativePath } from './validation.js';
+
+export { makeRelativePath };
 
 /**
  * Creates pagination metadata for a result set
@@ -115,28 +118,6 @@ export function transformSearchResults(fileMatches, basePath) {
     fileCount: fileResults.length,
     filesSearched: fileMatches.length
   };
-}
-
-/**
- * Makes a path relative to a base path (pure function)
- * @param {string} absolutePath - The absolute path
- * @param {string} basePath - The base path
- * @returns {string} Relative path
- */
-export function makeRelativePath(absolutePath, basePath) {
-  if (!absolutePath || !basePath) {
-    return absolutePath || '';
-  }
-  
-  // Normalize paths by removing trailing slashes
-  const normalizedBase = basePath.replace(/\/$/, '');
-  const normalizedPath = absolutePath.replace(/\/$/, '');
-  
-  if (normalizedPath.startsWith(normalizedBase + '/')) {
-    return normalizedPath.slice(normalizedBase.length + 1);
-  }
-  
-  return absolutePath;
 }
 
 /**

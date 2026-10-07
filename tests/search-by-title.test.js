@@ -101,7 +101,7 @@ describe('searchByTitle', () => {
     
     const result = await searchByTitle(mockVaultPath, 'Development', 'Projects');
     
-    expect(glob).toHaveBeenCalledWith('/test/vault/Projects/**/*.md');
+    expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault/Projects', absolute: true });
     expect(result.results).toHaveLength(2);
     expect(result.results.every(r => r.file.startsWith('Projects/'))).toBe(true);
   });

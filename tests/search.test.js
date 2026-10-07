@@ -110,6 +110,19 @@ describe('Functional Search Utilities', () => {
       expect(makeRelativePath('/other/file.md', '/base')).toBe('/other/file.md');
     });
 
+    // A sibling whose name starts with the base is not under it.
+    it('does not treat /basement as inside /base', () => {
+      expect(makeRelativePath('/basement/file.md', '/base')).toBe('/basement/file.md');
+    });
+
+    it('returns the base itself unchanged', () => {
+      expect(makeRelativePath('/base', '/base')).toBe('/base');
+    });
+
+    it('keeps a file whose name starts with two dots', () => {
+      expect(makeRelativePath('/base/..hidden.md', '/base')).toBe('..hidden.md');
+    });
+
     it('should handle empty inputs', () => {
       expect(makeRelativePath('', '/base')).toBe('');
       expect(makeRelativePath('/path', '')).toBe('/path');

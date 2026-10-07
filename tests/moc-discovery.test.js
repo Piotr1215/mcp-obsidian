@@ -325,7 +325,7 @@ tags: moc
 
       const result = await discoverMocs(mockVaultPath, { directory: '_mocs' });
 
-      expect(glob).toHaveBeenCalledWith('/test/vault/_mocs/**/*.md');
+      expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault/_mocs', absolute: true });
       expect(result.mocs).toHaveLength(1);
     });
 

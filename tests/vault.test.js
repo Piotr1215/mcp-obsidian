@@ -37,8 +37,8 @@ const VAULT_WIDE_TOOLS = [
 describe('expandHomePath', () => {
   it.each([
     ['~', '/home/me'],
-    ['~/vault', '/home/me/vault'],
-    ['~/Library/Mobile Documents/com~apple~CloudDocs/Vault', '/home/me/Library/Mobile Documents/com~apple~CloudDocs/Vault'],
+    ['~/vault', join('/home/me', 'vault')],
+    ['~/Library/Mobile Documents/com~apple~CloudDocs/Vault', join('/home/me', 'Library/Mobile Documents/com~apple~CloudDocs/Vault')],
     ['/abs/vault', '/abs/vault'],
     ['relative/vault', 'relative/vault'],
     ['~other/vault', '~other/vault'],
@@ -115,8 +115,9 @@ describe('a vault the server cannot read', () => {
     expect(textOf(response)).toContain('is a file, not a folder');
   });
 
-  // root can read a mode 000 directory, so the denial only happens unprivileged.
-  it.skipIf(process.getuid?.() === 0)('reports a folder it may not open, with the OS code', async () => {
+  // root can read a mode 000 directory, and Windows ignores the mode, so the
+  // denial only happens unprivileged on POSIX.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('reports a folder it may not open, with the OS code', async () => {
     const response = await callTool(createServer(join(root, 'locked')), 'list-notes', {});
 
     expect(response.isError).toBe(true);
@@ -146,7 +147,8 @@ describe('the server started with a ~ vault path', () => {
     await client.connect(new StdioClientTransport({
       command: process.execPath,
       args: [fileURLToPath(new URL('../src/index.js', import.meta.url)), '~/Vault'],
-      env: { ...process.env, HOME: home }
+      // os.homedir() reads HOME on POSIX and USERPROFILE on Windows
+      env: { ...process.env, HOME: home, USERPROFILE: home }
     }));
   });
 

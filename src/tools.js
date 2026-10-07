@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, unlink, access, stat } from 'fs/promises';
 import { constants } from 'fs';
-import { glob } from 'glob';
+import { glob, escape } from 'glob';
 import path from 'path';
 import { Errors, MCPError } from './errors.js';
 import { config } from './config.js';
@@ -22,12 +22,16 @@ import {
 } from './validation.js';
 
 /**
- * Glob for notes, dropping copies in ignored vault directories. Fails when
+ * Glob for notes in the vault or a folder in it, dropping copies in ignored
+ * vault directories. The folder goes to glob as its working directory, never
+ * into the pattern: glob reads \\ as an escape and [ ] as syntax, so a
+ * Windows path or a folder named "Notes [Work]" matched nothing. Fails when
  * the vault itself cannot be read, which glob would report as no notes.
  */
-async function findNotes(vaultPath, pattern) {
+async function findNotes(vaultPath, directory, pattern = '**/*.md') {
   await assertVaultReadable(vaultPath);
-  const files = await glob(pattern);
+  const cwd = directory ? path.join(vaultPath, directory) : vaultPath;
+  const files = await glob(pattern, { cwd, absolute: true });
   return files.filter(file => !isIgnoredPath(vaultPath, file, config.vault.ignoredDirectories));
 }
 
@@ -56,10 +60,7 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
   }
 
   // I/O: Get files
-  const searchPattern = searchPath
-    ? path.join(vaultPath, searchPath, '**/*.md')
-    : path.join(vaultPath, '**/*.md');
-  const files = await findNotes(vaultPath, searchPattern);
+  const files = await findNotes(vaultPath, searchPath);
 
   // Sort files for consistent pagination across requests
   files.sort();
@@ -136,10 +137,7 @@ export async function searchByTitle(vaultPath, query, searchPath, caseSensitive 
   }
 
   // I/O: Get files
-  const searchPattern = searchPath
-    ? path.join(vaultPath, searchPath, '**/*.md')
-    : path.join(vaultPath, '**/*.md');
-  const files = await findNotes(vaultPath, searchPattern);
+  const files = await findNotes(vaultPath, searchPath);
 
   // Sort files for consistent pagination across requests
   files.sort();
@@ -194,11 +192,8 @@ export async function listNotes(vaultPath, directory, limit = 100, offset = 0) {
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
 
-  const searchPath = directory
-    ? path.join(vaultPath, directory, '**/*.md')
-    : path.join(vaultPath, '**/*.md');
 
-  const files = await findNotes(vaultPath, searchPath);
+  const files = await findNotes(vaultPath, directory);
   const allNotes = files.map(file => path.relative(vaultPath, file)).sort();
 
   // Apply pagination
@@ -225,8 +220,7 @@ async function resolveNotePath(vaultPath, notePath) {
   }
 
   const basename = path.basename(notePath);
-  const searchPattern = path.join(vaultPath, '**', basename);
-  const matches = await findNotes(vaultPath, searchPattern);
+  const matches = await findNotes(vaultPath, '', `**/${escape(basename)}`);
 
   if (matches.length === 0) {
     throw Errors.resourceNotFound(notePath, { path: notePath });
@@ -489,11 +483,8 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
   
-  const searchPattern = directory
-    ? path.join(vaultPath, directory, '**/*.md')
-    : path.join(vaultPath, '**/*.md');
 
-  const files = await findNotes(vaultPath, searchPattern);
+  const files = await findNotes(vaultPath, directory);
 
   // Sort files for consistent results
   files.sort();
@@ -562,12 +553,9 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
   }
 
   // Batch mode
-  const searchPattern = notePath
-    ? path.join(vaultPath, notePath, '**/*.md')
-    : path.join(vaultPath, '**/*.md');
 
   // I/O: Get files
-  const allFiles = await findNotes(vaultPath, searchPattern);
+  const allFiles = await findNotes(vaultPath, notePath);
 
   // Sort files for consistent pagination across requests
   allFiles.sort();
@@ -630,11 +618,8 @@ export async function discoverMocs(vaultPath, options = {}) {
   }
 
   // I/O: Get all markdown files
-  const searchPattern = directory
-    ? path.join(vaultPath, directory, '**/*.md')
-    : path.join(vaultPath, '**/*.md');
 
-  const files = await findNotes(vaultPath, searchPattern);
+  const files = await findNotes(vaultPath, directory);
 
   // Sort files for consistent results
   files.sort();
