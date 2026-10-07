@@ -14,7 +14,10 @@ export default defineConfig({
         '**/*.spec.js',
         '**/*.config.js',
         '**/*.config.mjs',
-        'coverage/**'
+        'coverage/**',
+        // The stdio entrypoint only runs as a child process, which v8 coverage
+        // cannot see. tests/vault.test.js starts it over stdio with an SDK client.
+        'src/index.js'
       ],
       include: [
         'src/**/*.js'

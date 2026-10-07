@@ -15,6 +15,23 @@ Most existing Obsidian MCP servers rely on the Obsidian REST API plugin, which r
 
 This server instead works directly with Obsidian vault files on disk, making it compatible with setups using [obsidian.nvim](https://github.com/obsidian-nvim/obsidian.nvim) - a Neovim plugin that provides Obsidian-like features without requiring the Obsidian app.
 
+## Logseq and Foam
+
+Any folder of markdown notes works, so the server also reads [Foam](https://foambubble.github.io) workspaces and file-based [Logseq](https://logseq.com) graphs. Point it at the workspace or graph folder.
+
+| Tool | Version | Status |
+|------|---------|--------|
+| Foam | any | Supported |
+| Logseq file graphs | 0.10.x and earlier | Supported |
+| Logseq DB graphs | 2.x | Not supported: pages live in a database, not in markdown files |
+
+For Logseq graphs the server also reads:
+- `tags::` and other page properties at the top of a page, reported as tags and frontmatter
+- `title::` as the page title, falling back to the file name, with `a___b.md` read as `a/b`
+- multi-word `#[[tag name]]` tags
+
+It skips the copies Logseq keeps under `logseq/bak/` and `logseq/version-files/`, as Logseq does.
+
 ## Features
 
 - **Direct file system access** to Obsidian vaults - no Obsidian app required
@@ -103,6 +120,12 @@ claude mcp list
 
 You should see `obsidian` in the list of available MCP servers.
 
+### Vault path
+
+The server expands a leading `~` in the vault path, since MCP clients start it without a shell. It does not expand environment variables such as `$HOME`.
+
+If the server cannot read the vault, every tool that lists notes returns an error naming the cause instead of an empty result. On macOS, a vault in iCloud Drive, Documents or Desktop needs the app that starts the server, such as Claude or your terminal, to have access under System Settings > Privacy & Security > Files and Folders, or Full Disk Access.
+
 ## Available Tools
 
 ### search-vault
@@ -157,13 +180,12 @@ Search for content across all notes in your vault.
 ```
 
 ### search-by-title
-Search for notes by their H1 title (# Title).
+Search for notes by title: the first H1 (# Title), else a `title` property (YAML `title:` or Logseq `title::`), else the file name.
 - Fast title-based search
 - Case-sensitive/insensitive matching
-- Returns title, file path, and line number
+- Returns title, file path, and line number (null for a file name title)
 - **Resource links**: Results include MCP resource links for direct note access
 - Optional path filtering
-- Only matches H1 headings (single #)
 
 ### list-notes
 List all markdown files in your vault or a specific directory.
@@ -214,7 +236,7 @@ is absent. `write-note` replaces the whole file; this one does not.
 
 ### search-by-tags
 Find notes containing specific tags.
-- Supports both YAML frontmatter and inline #tags
+- Supports YAML frontmatter, Logseq `tags::` properties, inline #tags, and `#[[multi word]]` tags
 - AND operation for multiple tags
 - **Resource links**: Results include MCP resource links for direct note access
 - Case-sensitive/insensitive matching

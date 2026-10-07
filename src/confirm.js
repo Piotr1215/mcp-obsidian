@@ -88,6 +88,9 @@ export function createDeleteConfirmer(server, options = {}) {
   if (!capabilities?.elicitation) return null;
 
   const timeout = options.timeout ?? config.timeouts.confirmation;
+  // Called when the client proves at runtime that it cannot actually ask,
+  // so the session can stop loading a feature that does not work here.
+  const onUnsupported = options.onUnsupported ?? (() => {});
 
   return async ({ notePath, fullPath }) => {
     // Claude Code renders about three lines of `message` and collapses the rest
@@ -123,19 +126,26 @@ export function createDeleteConfirmer(server, options = {}) {
 
     if (result?.action !== 'accept') {
       const action = result?.action ?? 'no answer';
-      // Do not report a refusal as the human's when the human was never asked.
-      // `decline` claims a person said no; only `cancel` means no answer was
-      // available, and a client that conflates them makes the server lie about
-      // who refused. Measured against Codex 0.153.4, which advertises
-      // elicitation (`{"elicitation":{"form":{},"url":{}}}`) and then returns
-      // `decline` in about 10ms with nothing rendered. The elapsed time is
-      // timed here rather than assumed, and it is the only evidence available:
-      // the wire carries no way to tell the two apart.
-      const elapsed = Date.now() - askedAt;
-      const reason = elapsed < UNATTENDED_ANSWER_MS
-        ? `your MCP client answered "${action}" itself in ${elapsed}ms without showing you a prompt`
-        : `you did not confirm (${action})`;
-      return { confirmed: false, reason };
+      const elapsedMs = Date.now() - askedAt;
+
+      // An answer this fast was not given by a person, which means this client
+      // advertised elicitation it cannot actually deliver. Advertising it and
+      // never showing it is, from here, indistinguishable from never having
+      // advertised it, so treat it as exactly that: unload the feature for the
+      // rest of the session and let the delete proceed the way it does for any
+      // client that cannot be asked. The alternative is a client where
+      // delete-note simply never works, which is a worse answer than the one
+      // this server gave before the feature existed.
+      if (elapsedMs < UNATTENDED_ANSWER_MS) {
+        onUnsupported({ action, elapsedMs });
+        return {
+          confirmed: true,
+          reason: `client advertised elicitation but answered "${action}" itself in ${elapsedMs}ms without asking; treating it as a client that cannot confirm`,
+        };
+      }
+      // Past the threshold a person was plausibly there, so this is a real
+      // refusal and the note stays.
+      return { confirmed: false, reason: `you did not confirm (${action})` };
     }
     if (result?.content?.confirm !== true) {
       return { confirmed: false, reason: 'you declined' };

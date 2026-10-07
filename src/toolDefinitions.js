@@ -1,3 +1,17 @@
+/**
+ * delete-note describes itself differently depending on what the connected
+ * client can do. The confirmation is an optional feature, negotiated at
+ * connect: a client that cannot be asked never loads it, and must not be told
+ * a prompt is coming. A tool description is a prompt to the model, so an
+ * unconditional "the user is asked to confirm first" is not a harmless
+ * inaccuracy, it invites the model to treat a delete as reviewed when nobody
+ * reviewed it.
+ */
+export const DELETE_NOTE_DESCRIPTION = {
+  plain: 'Delete a note permanently. There is no trash, so this cannot be undone.',
+  confirming: 'Delete a note permanently. The user is asked to confirm first, and may refuse, in which case the note is kept and the tool says so. Read the result rather than assuming the deletion happened.',
+};
+
 export const toolDefinitions = [
   {
     name: 'search-vault',
@@ -180,7 +194,7 @@ export const toolDefinitions = [
   {
     name: 'search-by-title',
     title: 'Search by Title',
-    description: 'Search for notes by their H1 title',
+    description: 'Search for notes by title: the first H1, else a title property (YAML or Logseq title::), else the file name',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -231,11 +245,11 @@ export const toolDefinitions = [
               },
               title: {
                 type: 'string',
-                description: 'The H1 title of the note'
+                description: 'The note title: H1, title property, or file name'
               },
               line: {
-                type: 'integer',
-                description: 'Line number where title was found',
+                type: ['integer', 'null'],
+                description: 'Line number where title was found, null when it came from the file name',
                 minimum: 1
               }
             },
@@ -417,7 +431,7 @@ export const toolDefinitions = [
   {
     name: 'delete-note',
     title: 'Delete Note',
-    description: 'Delete a note permanently. The user is asked to confirm first, and may refuse, in which case the note is kept and the tool says so. Read the result rather than assuming the deletion happened.',
+    description: DELETE_NOTE_DESCRIPTION.plain,
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -470,7 +484,7 @@ export const toolDefinitions = [
   {
     name: 'search-by-tags',
     title: 'Search by Tags',
-    description: 'Search for notes by tags (supports both frontmatter and inline tags)',
+    description: 'Search for notes by tags (supports frontmatter, Logseq tags:: properties, inline #tags and #[[multi word]] tags)',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -581,15 +595,15 @@ export const toolDefinitions = [
         },
         frontmatter: {
           type: 'object',
-          description: 'Parsed frontmatter metadata'
+          description: 'Parsed frontmatter metadata, or Logseq page properties (key:: value)'
         },
         title: {
           type: ['string', 'null'],
-          description: 'H1 title from content'
+          description: 'Note title: H1, title property, or file name'
         },
         titleLine: {
           type: ['integer', 'null'],
-          description: 'Line number of title'
+          description: 'Line number of title, null when it came from the file name'
         },
         hasContent: {
           type: 'boolean',
@@ -708,7 +722,7 @@ export const toolDefinitions = [
               },
               title: {
                 type: 'string',
-                description: 'H1 title of the MOC'
+                description: 'Title of the MOC: H1, title property, or file name'
               },
               tags: {
                 type: 'array',

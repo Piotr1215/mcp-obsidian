@@ -240,8 +240,15 @@ export function findMatchesWithOperators(content, query, metadata, caseSensitive
   
   if (isPureFieldSearch && expression.field === 'title') {
     // For title searches, only return the title line itself
-    const titleMatch = lines.findIndex(line => line.trim().match(/^#\s+(.+)$/));
-    if (titleMatch !== -1) {
+    const h1Index = lines.findIndex(line => line.trim().match(/^#\s+(.+)$/));
+    // Without an H1 the title came from a title property or the file name
+    const titleMatch = h1Index !== -1 ? h1Index : (metadata.titleLine ?? 0) - 1;
+    if (titleMatch === -1 && metadata.title) {
+      matchedLines.push({
+        line: 1,
+        content: `[Document matches title: ${metadata.title}]`
+      });
+    } else if (titleMatch !== -1) {
       const match = {
         line: titleMatch + 1,
         content: lines[titleMatch].trim()

@@ -24,6 +24,13 @@ export const config = {
     deleteNote: process.env.OBSIDIAN_MCP_CONFIRM_DELETE !== 'off',
   },
 
+  // Directories under the vault root that hold copies of notes, not notes.
+  // Logseq writes page backups and conflict versions here and skips them
+  // itself; listing them would return every page twice.
+  vault: {
+    ignoredDirectories: ['logseq/bak', 'logseq/version-files'],
+  },
+
   // Security settings
   security: {
     allowedExtensions: ['.md'],
