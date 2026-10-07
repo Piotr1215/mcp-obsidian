@@ -174,4 +174,42 @@ describe('Functional Tag Utilities', () => {
       expect(hasAllTags([], [])).toBe(true);
     });
   });
+
+  /**
+   * A vault is not written in English. The ASCII-only character class dropped
+   * every non-Latin tag, and truncated accented ones at the accent, so #café
+   * indexed as "caf": a tag that looks real, matches nothing the author wrote,
+   * and gives no sign it is wrong. Reported in #7 for Cyrillic; it was never
+   * specific to Cyrillic.
+   */
+  describe('inline tags outside ASCII', () => {
+    it.each([
+      ['Cyrillic', 'текст #проект ещё', 'проект'],
+      ['CJK', 'text #标签 more', '标签'],
+      ['accented Latin', 'text #café more', 'café'],
+      ['Greek', 'text #δοκιμή more', 'δοκιμή'],
+    ])('extracts a %s tag whole', (_name, content, expected) => {
+      expect(extractTags(content)).toContain(expected);
+    });
+
+    it('does not truncate at the first non-ASCII character', () => {
+      expect(extractTags('text #café more')).not.toContain('caf');
+    });
+
+    it('mixes scripts in one note without losing either', () => {
+      expect(extractTags('#проект and #project together').sort())
+        .toEqual(['project', 'проект'].sort());
+    });
+
+    it('still refuses headings, which are not tags in any script', () => {
+      expect(extractTags('# Заголовок')).toEqual([]);
+      expect(extractTags('## 标题')).toEqual([]);
+    });
+
+    it('keeps the existing rules for nesting and trailing punctuation', () => {
+      expect(extractTags('see #работа/активный here')).toContain('работа/активный');
+      expect(extractTags('end #проект. done')).toContain('проект');
+    });
+  });
 });
+

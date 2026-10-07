@@ -3,7 +3,7 @@
  */
 
 import { extractPageProperties, titleFromFilename, findTitlePropertyLine } from './logseq.js';
-import { extractBracketTags } from './tags.js';
+import { extractBracketTags, extractInlineTags as extractInlineTagNames } from './tags.js';
 
 /**
  * Extracts frontmatter from markdown content (pure function)
@@ -101,20 +101,14 @@ function parseYamlContent(yamlContent) {
 }
 
 /**
- * Extracts inline tags from content (pure function)
+ * Extracts inline tags from content (pure function). Uses the same extractor
+ * as search-by-tags, so a note reports the tags it can be found by.
  * @param {string} content - The markdown content
- * @returns {string[]} Array of tag names (without #)
+ * @returns {string[]} Array of unique tag names (without #)
  */
 export function extractInlineTags(content) {
   if (!content) return [];
-  
-  // Match #tag-name pattern (alphanumeric and hyphens)
-  const tagPattern = /#([a-zA-Z0-9-_]+)/g;
-  const matches = content.match(tagPattern) || [];
-  
-  // Remove # prefix and deduplicate
-  const tags = matches.map(tag => tag.substring(1));
-  return [...new Set(tags)];
+  return [...new Set(extractInlineTagNames(content))];
 }
 
 /**
