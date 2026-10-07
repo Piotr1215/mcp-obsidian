@@ -143,7 +143,7 @@ This note has #inline-tag and #another-tag in the content.`;
     
     const result = await getNoteMetadata(mockVaultPath, 'folder', { batch: true });
     
-    expect(glob).toHaveBeenCalledWith('/test/vault/folder/**/*.md');
+    expect(glob).toHaveBeenCalledWith('**/*.md', { cwd: '/test/vault/folder', absolute: true });
     expect(result.notes).toHaveLength(2);
   });
   

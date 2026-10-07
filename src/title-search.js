@@ -4,6 +4,7 @@
 
 import { extractFrontmatter, hasTitleProperty } from './metadata.js';
 import { titleFromFilename, findTitlePropertyLine } from './logseq.js';
+import { makeRelativePath } from './validation.js';
 
 /**
  * Extracts the H1 title from markdown content (pure function)
@@ -97,26 +98,4 @@ export function transformTitleResults(fileTitleMatches, basePath) {
     count: results.length,
     filesSearched: fileTitleMatches.length
   };
-}
-
-/**
- * Makes a path relative to a base path (pure function)
- * @param {string} absolutePath - The absolute path
- * @param {string} basePath - The base path
- * @returns {string} Relative path
- */
-function makeRelativePath(absolutePath, basePath) {
-  if (!absolutePath || !basePath) {
-    return absolutePath || '';
-  }
-  
-  // Normalize paths by removing trailing slashes
-  const normalizedBase = basePath.replace(/\/$/, '');
-  const normalizedPath = absolutePath.replace(/\/$/, '');
-  
-  if (normalizedPath.startsWith(normalizedBase + '/')) {
-    return normalizedPath.slice(normalizedBase.length + 1);
-  }
-  
-  return absolutePath;
 }

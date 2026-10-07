@@ -4,6 +4,7 @@
 
 import { extractPageProperties, titleFromFilename, findTitlePropertyLine } from './logseq.js';
 import { extractBracketTags, extractInlineTags as extractInlineTagNames } from './tags.js';
+import { makeRelativePath } from './validation.js';
 
 /**
  * Extracts frontmatter from markdown content (pure function)
@@ -221,26 +222,4 @@ export function transformBatchMetadata(metadataResults, basePath) {
     count: notes.length,
     errors
   };
-}
-
-/**
- * Makes a path relative to a base path (pure function)
- * @param {string} absolutePath - The absolute path
- * @param {string} basePath - The base path
- * @returns {string} Relative path
- */
-function makeRelativePath(absolutePath, basePath) {
-  if (!absolutePath || !basePath) {
-    return absolutePath || '';
-  }
-  
-  // Normalize paths by removing trailing slashes
-  const normalizedBase = basePath.replace(/\/$/, '');
-  const normalizedPath = absolutePath.replace(/\/$/, '');
-  
-  if (normalizedPath.startsWith(normalizedBase + '/')) {
-    return normalizedPath.slice(normalizedBase.length + 1);
-  }
-  
-  return absolutePath;
 }
