@@ -53,6 +53,17 @@ export function validatePathWithinBase(basePath, targetPath) {
 }
 
 /**
+ * Checks whether a path is the base itself or lies under it (pure function)
+ * @param {string} basePath - The base directory path
+ * @param {string} targetPath - The path to check
+ * @returns {boolean} True when targetPath does not leave basePath
+ */
+export function isPathInside(basePath, targetPath) {
+  const relative = path.relative(basePath, targetPath);
+  return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+}
+
+/**
  * Makes a path relative to a base path (pure function). Uses the platform's
  * path rules, so C:\\Vault\\sub\\a.md under C:\\Vault is sub/a.md on Windows.
  * The result separates folders with / on every OS, as Obsidian's vault paths do.

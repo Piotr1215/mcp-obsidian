@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { searchVault } from '../src/tools.js';
-import { readFile, stat } from 'fs/promises';
+import { readFile, stat, realpath } from 'fs/promises';
 import { glob } from 'glob';
 
 vi.mock('fs/promises');
@@ -11,6 +11,7 @@ describe('searchVault with operators', () => {
   
   beforeEach(() => {
     vi.clearAllMocks();
+    realpath.mockImplementation(async p => p); // the mocked disk has no symlinks
   });
 
   it('should handle NOT operator correctly', async () => {

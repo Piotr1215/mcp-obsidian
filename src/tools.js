@@ -11,7 +11,7 @@ import { extractTags as extractTagsPure, hasAllTags } from './tags.js';
 import { resolveTitle, titleMatchesQuery, transformTitleResults } from './title-search.js';
 import { extractNoteMetadata, transformBatchMetadata } from './metadata.js';
 import { extractWikilinks, isMoc } from './links.js';
-import { assertVaultReadable } from './vault.js';
+import { assertVaultReadable, createVaultBoundary } from './vault.js';
 import {
   isIgnoredPath,
   makeRelativePath,
@@ -31,9 +31,27 @@ import {
  */
 async function findNotes(vaultPath, directory, pattern = '**/*.md') {
   await assertVaultReadable(vaultPath);
+  const inside = await createVaultBoundary(vaultPath);
   const cwd = directory ? path.join(vaultPath, directory) : vaultPath;
-  const files = await glob(pattern, { cwd, absolute: true });
-  return files.filter(file => !isIgnoredPath(vaultPath, file, config.vault.ignoredDirectories));
+  const files = (await glob(pattern, { cwd, absolute: true }))
+    .filter(file => !isIgnoredPath(vaultPath, file, config.vault.ignoredDirectories));
+  const kept = await Promise.all(files.map(file => inside(file).catch(() => false)));
+  return files.filter((_, i) => kept[i]);
+}
+
+/**
+ * Validates a path the caller gave: lexically first, then by where it really
+ * leads, so a symlink in the vault cannot reach a file outside it.
+ */
+async function validateVaultPath(vaultPath, targetPath) {
+  const lexical = validatePathWithinBase(vaultPath, targetPath);
+  if (!lexical.valid) {
+    return lexical;
+  }
+  const inside = await createVaultBoundary(vaultPath);
+  return await inside(lexical.resolvedPath)
+    ? lexical
+    : { valid: false, error: 'Path resolves outside vault directory' };
 }
 
 /**
@@ -56,7 +74,7 @@ export async function searchVault(vaultPath, query, searchPath, caseSensitive = 
 
   // Validate search path if provided
   if (searchPath) {
-    const pathValidation = validatePathWithinBase(vaultPath, searchPath);
+    const pathValidation = await validateVaultPath(vaultPath, searchPath);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: searchPath }));
   }
 
@@ -133,7 +151,7 @@ export async function searchByTitle(vaultPath, query, searchPath, caseSensitive 
 
   // Validate search path if provided
   if (searchPath) {
-    const pathValidation = validatePathWithinBase(vaultPath, searchPath);
+    const pathValidation = await validateVaultPath(vaultPath, searchPath);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: searchPath }));
   }
 
@@ -189,7 +207,7 @@ export async function searchByTitle(vaultPath, query, searchPath, caseSensitive 
 export async function listNotes(vaultPath, directory, limit = 100, offset = 0) {
   // Validate directory path if provided
   if (directory) {
-    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    const pathValidation = await validateVaultPath(vaultPath, directory);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
 
@@ -208,7 +226,7 @@ export async function listNotes(vaultPath, directory, limit = 100, offset = 0) {
 }
 
 async function resolveNotePath(vaultPath, notePath) {
-  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  const pathValidation = await validateVaultPath(vaultPath, notePath);
   assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
 
   const fullPath = pathValidation.resolvedPath;
@@ -290,7 +308,7 @@ export async function writeNote(vaultPath, notePath, content) {
   const extensionValidation = validateMarkdownExtension(notePath);
   assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
   
-  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  const pathValidation = await validateVaultPath(vaultPath, notePath);
   assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
   
   const fullPath = pathValidation.resolvedPath;
@@ -418,7 +436,7 @@ export async function appendNote(vaultPath, notePath, content, options = {}) {
   const extensionValidation = validateMarkdownExtension(notePath);
   assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
 
-  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  const pathValidation = await validateVaultPath(vaultPath, notePath);
   assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
 
   const fullPath = pathValidation.resolvedPath;
@@ -524,7 +542,7 @@ export async function deleteNote(vaultPath, notePath, { confirm } = {}) {
   const extensionValidation = validateMarkdownExtension(notePath);
   assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
   
-  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  const pathValidation = await validateVaultPath(vaultPath, notePath);
   assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
   
   const fullPath = pathValidation.resolvedPath;
@@ -566,7 +584,7 @@ export async function deleteNote(vaultPath, notePath, { confirm } = {}) {
 export async function searchByTags(vaultPath, searchTags, directory = null, caseSensitive = false, limit = 100, offset = 0) {
   // Validate directory path if provided
   if (directory) {
-    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    const pathValidation = await validateVaultPath(vaultPath, directory);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
   
@@ -621,13 +639,13 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
   // Single note mode
   if (notePath && !batch) {
     // Validate path
-    const pathValidation = validatePathWithinBase(vaultPath, notePath);
+    const pathValidation = await validateVaultPath(vaultPath, notePath);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
 
     const extensionValidation = validateMarkdownExtension(notePath);
     assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
 
-    const fullPath = path.join(vaultPath, notePath);
+    const fullPath = pathValidation.resolvedPath;
 
     // I/O: Check file size
     const stats = await stat(fullPath);
@@ -705,7 +723,7 @@ export async function discoverMocs(vaultPath, options = {}) {
 
   // Validate directory path if provided
   if (directory) {
-    const pathValidation = validatePathWithinBase(vaultPath, directory);
+    const pathValidation = await validateVaultPath(vaultPath, directory);
     assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: directory }));
   }
 

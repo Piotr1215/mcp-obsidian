@@ -5,7 +5,7 @@ import { getNoteMetadata } from '../src/tools.js';
 vi.mock('fs/promises');
 vi.mock('glob');
 
-import { readFile, stat } from 'fs/promises';
+import { readFile, stat, realpath } from 'fs/promises';
 import { glob } from 'glob';
 
 describe('getNoteMetadata', () => {
@@ -13,6 +13,7 @@ describe('getNoteMetadata', () => {
   
   beforeEach(() => {
     vi.clearAllMocks();
+    realpath.mockImplementation(async p => p); // the mocked disk has no symlinks
   });
   
   it('should extract frontmatter metadata', async () => {

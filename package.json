@@ -1,6 +1,6 @@
 {
   "name": "obsidian-mcp-filesystem",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for Obsidian with filesystem access and content search",
   "main": "src/index.js",
   "type": "module",
