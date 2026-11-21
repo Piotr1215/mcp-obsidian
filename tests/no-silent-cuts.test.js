@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm } from 'fs/promises';
+import { mkdtemp, writeFile, readFile, rm, mkdir, chmod } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/server.js';
+import { editNote } from '../src/tools.js';
 
 /**
  * A long note must never lose text its writer did not see. read-note pages
@@ -139,6 +140,52 @@ describe('notes cannot be cut', () => {
       expect(result.structuredContent.previousLength).toBe(original.length);
       expect(result.structuredContent.newLength).toBe(original.length - oldText.length + newText.length);
       expect(result.structuredContent.newLength).toBe(after.length);
+    });
+  });
+
+  describe('edit-note failure paths', () => {
+    it('reports more than 1000 matches without counting them all', async () => {
+      await writeFile(join(root, 'Many.md'), 'a'.repeat(1500));
+      const result = await call('edit-note', { path: 'Many.md', oldText: 'a', newText: 'b' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/more than 1000 times/);
+      expect(await readFile(join(root, 'Many.md'), 'utf-8')).toBe('a'.repeat(1500));
+    });
+
+    it('refuses a note over the size limit', async () => {
+      await writeFile(join(root, 'Huge.md'), 'z'.repeat(10 * 1024 * 1024 + 1));
+      const result = await call('edit-note', { path: 'Huge.md', oldText: 'z', newText: 'y' });
+      expect(result.isError).toBe(true);
+      expect((await readFile(join(root, 'Huge.md'), 'utf-8')).startsWith('zzz')).toBe(true);
+    });
+
+    it('reports a path that is not a readable file', async () => {
+      await mkdir(join(root, 'Dir.md'));
+      const result = await call('edit-note', { path: 'Dir.md', oldText: 'a', newText: 'b' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Failed to read note/);
+    });
+
+    it.skipIf(process.getuid?.() === 0)('reports a read-only note as permission denied and keeps it', async () => {
+      await writeFile(join(root, 'Locked.md'), 'locked text');
+      await chmod(join(root, 'Locked.md'), 0o444);
+      const result = await call('edit-note', { path: 'Locked.md', oldText: 'locked', newText: 'open' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Permission denied/);
+      expect(await readFile(join(root, 'Locked.md'), 'utf-8')).toBe('locked text');
+    });
+
+    it('rejects empty or missing arguments before touching the note', async () => {
+      await writeFile(join(root, 'Arg.md'), 'text');
+      await expect(editNote(root, 'Arg.md', '', 'x')).rejects.toThrow(/non-empty/);
+      await expect(editNote(root, 'Arg.md', 'text', null)).rejects.toThrow(/newText/);
+      expect(await readFile(join(root, 'Arg.md'), 'utf-8')).toBe('text');
+    });
+
+    it('still answers the next call after a failed edit', async () => {
+      await writeFile(join(root, 'Next.md'), 'one');
+      expect((await call('edit-note', { path: 'Next.md', oldText: 'two', newText: 'x' })).isError).toBe(true);
+      expect((await call('edit-note', { path: 'Next.md', oldText: 'one', newText: 'two' })).isError).toBeFalsy();
     });
   });
 
