@@ -78,6 +78,8 @@ function recoveryHint(code) {
     return 'Next step: find the note with search-by-title or list-notes, then retry with the vault-relative path it returns.';
   case -32003:
     return 'Next step: use a vault-relative path that stays inside the vault, such as "Folder/Note.md".';
+  case -32004:
+    return '';
   case -32602:
     return 'Next step: correct the argument as described and call the tool again.';
   default:
@@ -97,7 +99,7 @@ export function errorResponse(error) {
     content: [
       {
         type: 'text',
-        text: `Error: ${error.message}\n${recoveryHint(error.code)}`
+        text: [`Error: ${error.message}`, recoveryHint(error.code)].filter(Boolean).join('\n')
       }
     ],
     isError: true

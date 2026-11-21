@@ -104,6 +104,7 @@ export function createMetadata(startTime, additional = {}) {
 - `list-notes`
 - `read-note`
 - `write-note`
+- `edit-note`
 - `delete-note`
 - `search-by-tags`
 
