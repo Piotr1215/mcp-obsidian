@@ -26,32 +26,69 @@ export function textResponse(text, metadata = null) {
 }
 
 /**
- * Creates a structured response with both text and structured content
+ * Creates a structured response. The text block is exactly the serialized
+ * structuredContent: Claude Code shows the model only structuredContent on
+ * success and Codex shows both, so the two must say the same thing.
  * @param {object} data - The structured data
- * @param {string} [description] - Optional text description
  * @param {object} [metadata] - Optional execution metadata
  * @returns {object} MCP-compliant response
  */
-export function structuredResponse(data, description = null, metadata = null) {
+export function structuredResponse(data, metadata = null) {
   const response = {
     content: [
       {
         type: 'text',
-        text: description || JSON.stringify(data, null, 2)
+        text: JSON.stringify(data)
       }
     ],
     structuredContent: data
   };
-  
+
   if (metadata) {
     response._meta = metadata;
   }
-  
+
   return response;
 }
 
 /**
- * Creates an error response
+ * Add the offset of the next page to a result's pagination block, so a model
+ * can page without doing arithmetic. Null on the last page.
+ * @param {object} result - A result with a pagination block
+ * @returns {object} The result with pagination.nextOffset
+ */
+export function withNextOffset(result) {
+  if (!result?.pagination) {
+    return result;
+  }
+  const { offset, returned, hasMore } = result.pagination;
+  return {
+    ...result,
+    pagination: { ...result.pagination, nextOffset: hasMore ? offset + returned : null }
+  };
+}
+
+/**
+ * What to try next, by error code. An error message is a prompt: it should
+ * end with the call that gets the model unstuck.
+ */
+function recoveryHint(code) {
+  switch (code) {
+  case -32002:
+    return 'Next step: find the note with search-by-title or list-notes, then retry with the vault-relative path it returns.';
+  case -32003:
+    return 'Next step: use a vault-relative path that stays inside the vault, such as "Folder/Note.md".';
+  case -32602:
+    return 'Next step: correct the argument as described and call the tool again.';
+  default:
+    return 'Next step: check the path with list-notes and retry; if it keeps failing, report the message to the user.';
+  }
+}
+
+/**
+ * Creates a tool execution error: isError true with a message that says how
+ * to recover. Protocol errors (unknown tool, malformed request) are not built
+ * here; they stay JSON-RPC errors.
  * @param {Error|MCPError} error - The error to format
  * @returns {object} MCP-compliant error response
  */
@@ -60,7 +97,7 @@ export function errorResponse(error) {
     content: [
       {
         type: 'text',
-        text: `Error: ${error.message}`
+        text: `Error: ${error.message}\n${recoveryHint(error.code)}`
       }
     ],
     isError: true
