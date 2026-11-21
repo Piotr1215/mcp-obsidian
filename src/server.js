@@ -3,7 +3,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { searchVault, searchByTitle, listNotes, readNote, writeNote, appendNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
+import { searchVault, searchByTitle, listNotes, readNote, writeNote, editNote, appendNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
 import { toolDefinitions, DELETE_NOTE_DESCRIPTION, SERVER_INSTRUCTIONS } from './toolDefinitions.js';
 import { normalizeArguments } from './arguments.js';
 import { windowNote } from './read-window.js';
@@ -129,6 +129,14 @@ export function createServer(vaultPath) {
           contentLength: content.length
         });
         return structuredResponse({ path: notePath, written: true, contentLength: content.length }, metadata);
+      }
+
+      case 'edit-note': {
+        const { path: notePath, oldText, newText } = args;
+        const result = await editNote(vaultPath, notePath, oldText, newText);
+
+        const metadata = createMetadata(startTime, { tool: 'edit-note' });
+        return structuredResponse(result, metadata);
       }
 
       case 'delete-note': {

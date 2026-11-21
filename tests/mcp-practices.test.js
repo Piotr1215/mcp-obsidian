@@ -57,10 +57,16 @@ describe('MCP practices through an SDK client', () => {
       expect(tool.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
     });
 
-    it('marks write-note as a destructive, idempotent overwrite', async () => {
+    it('marks write-note as create-only, so not destructive', async () => {
       const { tools } = await client.listTools();
       expect(tools.find(t => t.name === 'write-note').annotations)
-        .toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false });
+        .toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false });
+    });
+
+    it('marks edit-note as a destructive, non-idempotent replace', async () => {
+      const { tools } = await client.listTools();
+      expect(tools.find(t => t.name === 'edit-note').annotations)
+        .toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false });
     });
 
     it('marks append-note as additive and not idempotent', async () => {
@@ -77,7 +83,7 @@ describe('MCP practices through an SDK client', () => {
 
     it('annotates every tool', async () => {
       const { tools } = await client.listTools();
-      expect(tools).toHaveLength(10);
+      expect(tools).toHaveLength(11);
       for (const tool of tools) expect(tool.annotations).toBeDefined();
     });
   });
@@ -90,6 +96,9 @@ describe('MCP practices through an SDK client', () => {
       expect(text).toMatch(/vault-relative/i);
       expect(text).toMatch(/search/i);
       expect(text).toMatch(/elicitation/i);
+      expect(text).toMatch(/write-note/);
+      expect(text).toMatch(/edit-note/);
+      expect(text).toMatch(/append-note/);
       expect(text).toMatch(/delete/i);
     });
   });
@@ -105,6 +114,7 @@ describe('MCP practices through an SDK client', () => {
       ['discover-mocs', {}],
       ['write-note', { path: 'Out/Written.md', content: '# Written\n' }],
       ['append-note', { path: 'Out/Written.md', content: 'more' }],
+      ['edit-note', { path: 'Out/Written.md', oldText: 'more', newText: 'less' }],
       ['delete-note', { path: 'Out/Written.md' }],
     ];
 

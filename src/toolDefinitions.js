@@ -18,7 +18,7 @@ export const DELETE_NOTE_DESCRIPTION = {
  * delete-note's confirmation is described as it behaves: it is asked only of a
  * client that advertised elicitation, and kept on any failure to get an answer.
  */
-export const SERVER_INSTRUCTIONS = 'Reads and edits markdown notes in one Obsidian vault on disk. All paths are vault-relative, such as "Projects/Plan.md". Search before reading: use search-vault (content), search-by-title or search-by-tags to find a note, then read-note. discover-mocs maps the vault. Results are paged: pass the offset a response gives as nextOffset. read-note cuts long notes and says where to continue. delete-note is permanent: it asks the user to confirm through elicitation and keeps the note if the user declines or cannot be reached.';
+export const SERVER_INSTRUCTIONS = 'Reads and edits markdown notes in one Obsidian vault on disk. Paths are vault-relative, such as "Projects/Plan.md". Search with search-vault, search-by-title or search-by-tags, then read-note. Results are paged: pass nextOffset. read-note cuts long notes and says where to continue. New notes use write-note, which never replaces a note. Changes use edit-note (exact text) or append-note. delete-note is permanent: it asks the user to confirm through elicitation and keeps the note if the user declines or cannot be reached.';
 
 const READ_ONLY = { readOnlyHint: true, openWorldHint: false };
 
@@ -448,8 +448,8 @@ export const toolDefinitions = [
   {
     name: 'write-note',
     title: 'Write Note',
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    description: 'Create or update a note',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    description: 'Create a new note. Fails if the note already exists and leaves it untouched, so it never replaces text you may not have seen (read-note shows long notes in pages). To change an existing note use edit-note or append-note.',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
@@ -472,11 +472,51 @@ export const toolDefinitions = [
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Path written' },
+        path: { type: 'string', description: 'Path created' },
         written: { type: 'boolean' },
         contentLength: { type: 'integer', minimum: 0, description: 'Characters in the content sent' }
       },
       required: ['path', 'written', 'contentLength'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'edit-note',
+    title: 'Edit Note',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    description: 'Replace one exact piece of text in an existing note and leave the rest untouched. oldText must occur exactly once: copy it from read-note, whitespace and line breaks included, and add surrounding text if it matches more than once. Use write-note for a new note and append-note to add text without quoting any.',
+    inputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the note relative to vault root',
+          minLength: 1,
+          pattern: '\\.md$'
+        },
+        oldText: {
+          type: 'string',
+          description: 'Exact text to replace, copied from read-note. Must occur exactly once in the note.',
+          minLength: 1
+        },
+        newText: {
+          type: 'string',
+          description: 'Text that replaces oldText. May be empty to delete oldText.'
+        },
+      },
+      required: ['path', 'oldText', 'newText'],
+      additionalProperties: false
+    },
+    outputSchema: {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Path edited' },
+        previousLength: { type: 'integer', minimum: 0, description: 'Characters in the note before the edit' },
+        newLength: { type: 'integer', minimum: 0, description: 'Characters in the note after the edit' }
+      },
+      required: ['path', 'previousLength', 'newLength'],
       additionalProperties: false
     }
   },
@@ -515,7 +555,7 @@ export const toolDefinitions = [
     name: 'append-note',
     title: 'Append to Note',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    description: 'Append content to an existing note or create a new note. Unlike write-note which overwrites, this preserves existing content and adds new content at the end or under a specific heading.',
+    description: 'Append content to an existing note or create a new note. Existing content is preserved; the new content goes at the end or under a specific heading.',
     inputSchema: {
       $schema: 'http://json-schema.org/draft-07/schema#',
       type: 'object',

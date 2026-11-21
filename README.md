@@ -199,10 +199,20 @@ Read the content of a specific note. Output is capped near 40,000 characters; a 
 - File size limits prevent memory issues
 
 ### write-note
-Create or update a note with new content.
-- Atomic writes for data integrity
+Create a new note. It never replaces a note: when the path already exists it
+returns an error, leaves the file untouched and points to `edit-note` and
+`append-note`. `read-note` returns long notes in pages and hosts cut results
+too, so a caller that saves back a copy it only partly saw would otherwise
+drop the rest of the note.
 - Automatic directory creation
-- Content size validation
+- Exclusive create, so a racing write cannot replace a note either
+
+### edit-note
+Replace one exact piece of text in an existing note and leave the rest alone.
+- `path`, `oldText` (non-empty), `newText`
+- `oldText` must occur exactly once. Zero matches, several matches and a
+  missing note are errors that say how to recover; nothing is written
+- Returns `path`, `previousLength` and `newLength` in characters
 
 ### delete-note
 Delete a note from your vault. Permanent, there is no trash.
@@ -224,7 +234,7 @@ do.
 
 ### append-note
 Add content to an existing note without overwriting it, creating the note if it
-is absent. `write-note` replaces the whole file; this one does not.
+is absent. `write-note` only creates notes; use `edit-note` to change text in the middle.
 
 - `section` appends under a specific heading rather than at the end
 - `ensureNewline` (default true) keeps the appended block from running into the

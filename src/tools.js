@@ -299,17 +299,103 @@ export async function writeNote(vaultPath, notePath, content) {
   // Pure: Sanitize content
   const sanitizedContent = sanitizeContentPure(content);
   
-  // I/O: Write file
+  // I/O: Create the file. The 'wx' flag fails if the path exists, so a note
+  // is never replaced, even by a write that races with another one.
   try {
     await mkdir(dir, { recursive: true });
-    await writeFile(fullPath, sanitizedContent, 'utf-8');
+    await writeFile(fullPath, sanitizedContent, { encoding: 'utf-8', flag: 'wx' });
     return notePath;
   } catch (error) {
+    if (error.code === 'EEXIST') {
+      let length = null;
+      try {
+        length = (await readFile(fullPath, 'utf-8')).length;
+      } catch {
+        // Length is only part of the message.
+      }
+      const size = length === null ? '' : ` (${length} characters)`;
+      throw Errors.conflict(
+        `${notePath} already exists${size}. write-note only creates notes, so it never replaces text you may not have seen. Change it with edit-note (replace exact text) or append-note.`,
+        { path: notePath }
+      );
+    }
     if (error.code === 'EACCES' || error.code === 'EPERM') {
       throw Errors.accessDenied(`Permission denied: ${notePath}`, { path: notePath });
     }
     throw Errors.internalError(`Failed to write note: ${error.message}`, { path: notePath });
   }
+}
+
+/**
+ * Replace one exact piece of text in an existing note. The text must occur
+ * exactly once, so the edit never touches text the caller did not quote and
+ * never rewrites the rest of the note from a copy that may have been cut.
+ * @returns {Promise<{path: string, previousLength: number, newLength: number}>}
+ */
+export async function editNote(vaultPath, notePath, oldText, newText) {
+  const paramValidation = validateRequiredParameters({ path: notePath, oldText, newText }, ['path', 'oldText', 'newText']);
+  assertValid(paramValidation, (msg) => Errors.invalidParams(msg));
+
+  if (typeof oldText !== 'string' || oldText.length === 0) {
+    throw Errors.invalidParams('oldText must be a non-empty string. To add text without quoting any, use append-note.', { path: notePath });
+  }
+
+  const extensionValidation = validateMarkdownExtension(notePath);
+  assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
+
+  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
+
+  const fullPath = pathValidation.resolvedPath;
+
+  let existing;
+  try {
+    const stats = await stat(fullPath);
+    const sizeValidation = validateFileSizePure(stats.size, config.limits.maxFileSize);
+    assertValid(sizeValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
+    existing = await readFile(fullPath, 'utf-8');
+  } catch (error) {
+    if (error instanceof MCPError) throw error;
+    if (error.code === 'ENOENT') {
+      throw Errors.resourceNotFound(`${notePath}. edit-note only changes notes that exist; create it with write-note`, { path: notePath });
+    }
+    throw Errors.internalError(`Failed to read note: ${error.message}`, { path: notePath });
+  }
+
+  // Count overlapping occurrences: "aa" in "aaa" is ambiguous.
+  let count = 0;
+  let first = -1;
+  for (let at = existing.indexOf(oldText); at !== -1; at = existing.indexOf(oldText, at + 1)) {
+    if (count === 0) first = at;
+    count++;
+    if (count > 1000) break;
+  }
+
+  if (count === 0) {
+    throw Errors.conflict(
+      `oldText was not found in ${notePath}. Copy the exact text from read-note; whitespace and line breaks count. Nothing was changed.`,
+      { path: notePath }
+    );
+  }
+  if (count > 1) {
+    throw Errors.conflict(
+      `oldText occurs ${count > 1000 ? 'more than 1000' : count} times in ${notePath}. Include more surrounding text so it matches exactly once. Nothing was changed.`,
+      { path: notePath, matches: count }
+    );
+  }
+
+  const sanitizedNew = sanitizeContentPure(newText);
+  const updated = existing.slice(0, first) + sanitizedNew + existing.slice(first + oldText.length);
+
+  try {
+    await writeFile(fullPath, updated, 'utf-8');
+  } catch (error) {
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      throw Errors.accessDenied(`Permission denied: ${notePath}`, { path: notePath });
+    }
+    throw Errors.internalError(`Failed to edit note: ${error.message}`, { path: notePath });
+  }
+  return { path: notePath, previousLength: existing.length, newLength: updated.length };
 }
 
 /**

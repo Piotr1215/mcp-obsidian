@@ -31,14 +31,15 @@ describe('stdio client against src/index.js', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('lists ten annotated tools and serves instructions', async () => {
+  it('lists eleven annotated tools and serves instructions', async () => {
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     const byName = Object.fromEntries(tools.map(t => [t.name, t.annotations]));
     for (const name of ['search-vault', 'search-by-title', 'list-notes', 'read-note', 'search-by-tags', 'get-note-metadata', 'discover-mocs']) {
       expect(byName[name]).toMatchObject({ readOnlyHint: true, openWorldHint: false });
     }
-    expect(byName['write-note'].destructiveHint).toBe(true);
+    expect(byName['write-note'].destructiveHint).toBe(false);
+    expect(byName['edit-note']).toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false });
     expect(byName['append-note'].idempotentHint).toBe(false);
     expect(byName['delete-note'].destructiveHint).toBe(true);
     expect(client.getInstructions().length).toBeLessThan(600);
@@ -52,6 +53,8 @@ describe('stdio client against src/index.js', () => {
       ['search-vault', { query: 'alpha' }],
       ['write-note', { path: 'New.md', content: '# New\n' }],
       ['read-note', { path: 'New.md' }],
+      ['edit-note', { path: 'New.md', oldText: '# New', newText: '# Newer' }],
+      ['edit-note', { path: 'New.md', oldText: '# Newer', newText: '# Newest' }],
       ['search-by-tags', { tags: ['shared'] }],
     ];
     for (const [name, args] of calls) {

@@ -226,7 +226,7 @@ describe('Tools module', () => {
       expect(writeFile).toHaveBeenCalledWith(
         '/test/vault/new/folder/note.md',
         '# New Note',
-        'utf-8'
+        { encoding: 'utf-8', flag: 'wx' }
       );
       expect(result).toBe('new/folder/note.md');
     });
