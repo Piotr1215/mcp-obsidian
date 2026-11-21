@@ -3,7 +3,8 @@ import {
   textResponse,
   structuredResponse,
   errorResponse,
-  createMetadata
+  createMetadata,
+  withNextOffset
 } from '../src/response-formatter.js';
 
 describe('Response Formatter', () => {
@@ -30,52 +31,47 @@ describe('Response Formatter', () => {
   });
 
   describe('structuredResponse', () => {
-    it('should create structured response with description', () => {
+    it('puts exactly the serialized structuredContent in the text block', () => {
       const data = { count: 5, items: ['a', 'b', 'c'] };
-      const response = structuredResponse(data, 'Found 5 items');
-      
+      const response = structuredResponse(data);
+
       expect(response).toEqual({
-        content: [
-          {
-            type: 'text',
-            text: 'Found 5 items'
-          }
-        ],
+        content: [{ type: 'text', text: JSON.stringify(data) }],
         structuredContent: data
       });
     });
 
-    it('should create structured response without description', () => {
-      const data = { key: 'value' };
-      const response = structuredResponse(data);
-      
-      expect(response.content[0].text).toBe(JSON.stringify(data, null, 2));
-      expect(response.structuredContent).toEqual(data);
-    });
-
-    it('should include metadata when provided', () => {
-      const data = { key: 'value' };
+    it('includes metadata when provided', () => {
       const metadata = { executionTime: 50, filesSearched: 10 };
-      const response = structuredResponse(data, null, metadata);
-      
+      const response = structuredResponse({ key: 'value' }, metadata);
+
       expect(response._meta).toEqual(metadata);
     });
   });
 
+  describe('withNextOffset', () => {
+    it('adds the next page offset when more results remain', () => {
+      const result = withNextOffset({ pagination: { total: 9, returned: 3, limit: 3, offset: 3, hasMore: true } });
+      expect(result.pagination.nextOffset).toBe(6);
+    });
+
+    it('is null on the last page', () => {
+      const result = withNextOffset({ pagination: { total: 3, returned: 3, limit: 3, offset: 0, hasMore: false } });
+      expect(result.pagination.nextOffset).toBeNull();
+    });
+
+    it('leaves a result without pagination alone', () => {
+      expect(withNextOffset({ path: 'a.md' })).toEqual({ path: 'a.md' });
+    });
+  });
+
   describe('errorResponse', () => {
-    it('should create error response from Error', () => {
-      const error = new Error('Something went wrong');
-      const response = errorResponse(error);
-      
-      expect(response).toEqual({
-        content: [
-          {
-            type: 'text',
-            text: 'Error: Something went wrong'
-          }
-        ],
-        isError: true
-      });
+    it('creates an isError result whose text carries the message and a next step', () => {
+      const response = errorResponse(new Error('Something went wrong'));
+
+      expect(response.isError).toBe(true);
+      expect(response.content).toHaveLength(1);
+      expect(response.content[0].text).toMatch(/^Error: Something went wrong\nNext step: /);
     });
   });
 

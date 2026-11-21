@@ -4,10 +4,12 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { searchVault, searchByTitle, listNotes, readNote, writeNote, appendNote, deleteNote, searchByTags, getNoteMetadata, discoverMocs } from './tools.js';
-import { toolDefinitions, DELETE_NOTE_DESCRIPTION } from './toolDefinitions.js';
+import { toolDefinitions, DELETE_NOTE_DESCRIPTION, SERVER_INSTRUCTIONS } from './toolDefinitions.js';
+import { normalizeArguments } from './arguments.js';
+import { windowNote } from './read-window.js';
 import { Errors, MCPError } from './errors.js';
 import { createDeleteConfirmer } from './confirm.js';
-import { textResponse, structuredResponse, errorResponse, createMetadata, stripSearchContext } from './response-formatter.js';
+import { structuredResponse, errorResponse, createMetadata, stripSearchContext, withNextOffset } from './response-formatter.js';
 
 export function createServer(vaultPath) {
   const server = new Server(
@@ -21,6 +23,7 @@ export function createServer(vaultPath) {
           listChanged: false
         },
       },
+      instructions: SERVER_INSTRUCTIONS,
     }
   );
 
@@ -53,122 +56,79 @@ export function createServer(vaultPath) {
         : tool),
   }));
 
-  // Handle tool calls
+  // Handle tool calls. An unknown tool is a protocol error and is thrown. Every
+  // other failure, bad argument values included, is an execution error the
+  // model can read and act on, so it goes back as an isError result.
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+    const { name, arguments: rawArgs } = request.params;
     const startTime = Date.now();
 
+    const definition = toolDefinitions.find(tool => tool.name === name);
+    if (!definition) {
+      throw Errors.toolNotFound(name);
+    }
+
     try {
+      const checked = normalizeArguments(definition.inputSchema, rawArgs);
+      if (checked.error) {
+        throw Errors.invalidParams(checked.error);
+      }
+      const args = checked.args;
+
       switch (name) {
       case 'search-vault': {
         const { query, path: searchPath, caseSensitive = false, includeContext = true, contextLines = 2, limit = 100, offset = 0 } = args;
         const contextOptions = { includeContext, contextLines };
         const result = await searchVault(vaultPath, query, searchPath, caseSensitive, contextOptions, limit, offset);
 
-        let description = result.totalMatches === 0
-          ? `No matches found for "${query}"`
-          : `Showing ${result.pagination.returned} of ${result.pagination.total} matches in ${result.fileCount} files for "${query}"`;
-
-        if (result.pagination.hasMore) {
-          const nextOffset = offset + limit;
-          description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
-        }
-
-        if (includeContext && result.files.length > 0) {
-          description += '\n\n';
-          const maxFilesInPreview = 5;
-          const filesToShow = result.files.slice(0, maxFilesInPreview);
-
-          filesToShow.forEach(file => {
-            description += `${file.path} (${file.matchCount} matches)\n`;
-            file.matches.slice(0, 3).forEach(match => {
-              if (match.context) {
-                description += `  Line ${match.line}: ${match.context.highlighted}\n`;
-              } else {
-                description += `  Line ${match.line}: ${match.content}\n`;
-              }
-            });
-            if (file.matchCount > 3) {
-              description += `  ... and ${file.matchCount - 3} more matches\n`;
-            }
-            description += '\n';
-          });
-
-          if (result.files.length > maxFilesInPreview) {
-            description += `\n... and ${result.files.length - maxFilesInPreview} more files.\n`;
-          }
-        }
-
         const metadata = createMetadata(startTime, {
           tool: 'search-vault',
           filesSearched: result.filesSearched || 0
         });
 
-        const structuredContent = stripSearchContext(result);
-
-        return structuredResponse(structuredContent, description, metadata);
+        return structuredResponse(withNextOffset(stripSearchContext(result)), metadata);
       }
 
       case 'search-by-title': {
         const { query, path: searchPath, caseSensitive = false, limit = 100, offset = 0 } = args;
         const result = await searchByTitle(vaultPath, query, searchPath, caseSensitive, limit, offset);
 
-        let description = result.count === 0
-          ? `No notes found with title matching "${query}"`
-          : `Showing ${result.pagination.returned} of ${result.pagination.total} notes with title matching "${query}"`;
-
-        if (result.pagination.hasMore) {
-          const nextOffset = offset + limit;
-          description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
-        }
-
         const metadata = createMetadata(startTime, {
           tool: 'search-by-title',
           filesSearched: result.filesSearched || 0
         });
 
-        return structuredResponse(result, description, metadata);
+        return structuredResponse(withNextOffset(result), metadata);
       }
 
       case 'list-notes': {
         const { directory, limit = 100, offset = 0 } = args;
         const result = await listNotes(vaultPath, directory, limit, offset);
 
-        let description = result.count === 0
-          ? `No notes found${directory ? ` in ${directory}` : ''}`
-          : `Showing ${result.pagination.returned} of ${result.pagination.total} notes${directory ? ` in ${directory}` : ''}\n\n${result.notes.join('\n')}`;
-
-        if (result.pagination.hasMore) {
-          const nextOffset = offset + limit;
-          description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
-        }
-
-        const metadata = createMetadata(startTime, { tool: 'list-notes' });
-
-        return structuredResponse(result, description, metadata);
+        return structuredResponse(withNextOffset(result), createMetadata(startTime, { tool: 'list-notes' }));
       }
 
       case 'read-note': {
-        const { path: notePath } = args;
+        const { path: notePath, offset = 0 } = args;
         const content = await readNote(vaultPath, notePath);
-        
-        // For read-note, we return the content directly as text
-        const metadata = createMetadata(startTime, { 
+        const result = windowNote(notePath, content, offset);
+
+        const metadata = createMetadata(startTime, {
           tool: 'read-note',
-          contentLength: content.length 
+          contentLength: content.length
         });
-        return textResponse(content, metadata);
+        return structuredResponse(result, metadata);
       }
 
       case 'write-note': {
         const { path: notePath, content } = args;
         await writeNote(vaultPath, notePath, content);
-        
-        const metadata = createMetadata(startTime, { 
+
+        const metadata = createMetadata(startTime, {
           tool: 'write-note',
-          contentLength: content.length 
+          contentLength: content.length
         });
-        return textResponse(`Note written successfully to ${notePath}`, metadata);
+        return structuredResponse({ path: notePath, written: true, contentLength: content.length }, metadata);
       }
 
       case 'delete-note': {
@@ -181,11 +141,16 @@ export function createServer(vaultPath) {
           tool: 'delete-note',
           deleted: outcome.deleted
         });
-        // A refusal is reported, not thrown. Saying it plainly matters more than
-        // usual here: the model must not read a kept note as a deleted one.
-        return outcome.deleted
-          ? textResponse(`Note deleted successfully: ${notePath}`, metadata)
-          : textResponse(`Note NOT deleted, ${outcome.reason}: ${notePath}`, metadata);
+        // A refusal is a failure to do what was asked, not a success: the note
+        // is still there. Flag it so the model cannot read a kept note as a
+        // deleted one.
+        if (outcome.deleted) {
+          return structuredResponse({ path: notePath, deleted: true }, metadata);
+        }
+        return {
+          ...structuredResponse({ path: notePath, deleted: false, reason: outcome.reason }, metadata),
+          isError: true,
+        };
       }
 
       case 'append-note': {
@@ -197,27 +162,24 @@ export function createServer(vaultPath) {
           contentLength: content.length,
           hasSection: !!section
         });
-        const message = section
-          ? `Content appended to ${notePath} under section "${section}"`
-          : `Content appended to ${notePath}`;
-        return textResponse(message, metadata);
+        return structuredResponse({
+          path: notePath,
+          appended: true,
+          section: section ?? null,
+          contentLength: content.length
+        }, metadata);
       }
 
       case 'search-by-tags': {
-        const { tags, directory, caseSensitive = false } = args;
-        const result = await searchByTags(vaultPath, tags, directory, caseSensitive);
-
-        const tagList = tags.join(', ');
-        const description = result.count === 0
-          ? `No notes found with tags: ${tagList}`
-          : `Found ${result.count} notes with tags: ${tagList}`;
+        const { tags, directory, caseSensitive = false, limit = 100, offset = 0 } = args;
+        const result = await searchByTags(vaultPath, tags, directory, caseSensitive, limit, offset);
 
         const metadata = createMetadata(startTime, {
           tool: 'search-by-tags',
           tagsSearched: tags.length
         });
 
-        return structuredResponse(result, description, metadata);
+        return structuredResponse(withNextOffset(result), metadata);
       }
 
       case 'get-note-metadata': {
@@ -226,61 +188,17 @@ export function createServer(vaultPath) {
         const pathArg = batch && directory ? directory : notePath;
         const result = await getNoteMetadata(vaultPath, pathArg, { batch, limit, offset });
 
-        let description;
-
-        if (batch) {
-          description = result.count === 0
-            ? 'No notes found'
-            : `Showing ${result.pagination.returned} of ${result.pagination.total} notes`;
-          if (result.errors && result.errors.length > 0) {
-            description += ` (${result.errors.length} errors)`;
-          }
-
-          if (result.pagination.hasMore) {
-            const nextOffset = offset + limit;
-            description += `\n(Use limit=${limit}, offset=${nextOffset} to get next page)`;
-          }
-        } else {
-          description = `Retrieved metadata for: ${notePath}`;
-        }
-
         const metadata = createMetadata(startTime, {
           tool: 'get-note-metadata',
           mode: batch ? 'batch' : 'single'
         });
 
-        return structuredResponse(result, description, metadata);
+        return structuredResponse(withNextOffset(result), metadata);
       }
 
       case 'discover-mocs': {
-        const { mocName, directory } = args;
-        const result = await discoverMocs(vaultPath, { mocName, directory });
-
-        let description = result.count === 0
-          ? 'No MOCs found'
-          : `Found ${result.count} MOCs`;
-
-        if (mocName) {
-          description += ` matching "${mocName}"`;
-        }
-        if (directory) {
-          description += ` in ${directory}`;
-        }
-
-        if (result.mocs.length > 0) {
-          description += '\n\n';
-          result.mocs.forEach(moc => {
-            description += `${moc.title} (${moc.linkCount} linked notes)\n`;
-            description += `  Path: ${moc.path}\n`;
-            if (moc.linkedNotes.length > 0) {
-              description += `  Links: ${moc.linkedNotes.join(', ')}\n`;
-            }
-            if (moc.linkedMocs && moc.linkedMocs.length > 0) {
-              description += `  Links to MOCs: ${moc.linkedMocs.join(', ')}\n`;
-            }
-            description += '\n';
-          });
-        }
+        const { mocName, directory, limit = 50, offset = 0 } = args;
+        const result = await discoverMocs(vaultPath, { mocName, directory, limit, offset });
 
         const metadata = createMetadata(startTime, {
           tool: 'discover-mocs',
@@ -288,14 +206,14 @@ export function createServer(vaultPath) {
           totalLinkedNotes: result.mocs.reduce((sum, moc) => sum + moc.linkCount, 0)
         });
 
-        return structuredResponse(result, description, metadata);
+        return structuredResponse(withNextOffset(result), metadata);
       }
 
       default:
         throw Errors.toolNotFound(name);
       }
     } catch (error) {
-      if (error instanceof MCPError) {
+      if (error instanceof MCPError && error.message.startsWith('Unknown tool')) {
         throw error;
       }
       return errorResponse(error);

@@ -27,6 +27,8 @@ const callTool = (server, name, args) =>
 const textOf = (response) =>
   response.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
 
+const pagination = (response) => JSON.parse(textOf(response)).pagination;
+
 describe('the text payload clients without structuredContent read', () => {
   let vault;
 
@@ -52,8 +54,8 @@ describe('the text payload clients without structuredContent read', () => {
   });
 
   it('still carries the count, so the list did not replace the summary', async () => {
-    const text = textOf(await callTool(createServer(vault), 'list-notes', {}));
-    expect(text).toMatch(/Showing 3 of 3 notes/);
+    const response = await callTool(createServer(vault), 'list-notes', {});
+    expect(pagination(response)).toMatchObject({ total: 3, returned: 3, hasMore: false });
   });
 
   it('scopes to a directory without dropping the paths', async () => {
@@ -67,18 +69,18 @@ describe('the text payload clients without structuredContent read', () => {
   // that, or a paging client is told the total and never told how to get
   // the rest.
   it('keeps the paging hint reachable when the list is truncated', async () => {
-    const text = textOf(await callTool(createServer(vault), 'list-notes', { limit: 2, offset: 0 }));
+    const response = await callTool(createServer(vault), 'list-notes', { limit: 2, offset: 0 });
+    const text = textOf(response);
 
-    expect(text).toMatch(/Showing 2 of 3 notes/);
-    expect(text).toContain('offset=2');
+    expect(pagination(response)).toMatchObject({ total: 3, returned: 2, hasMore: true, nextOffset: 2 });
     expect(text).toContain('AI/Memory/Alpha.md');
   });
 
   it('says so plainly when the vault has nothing to list', async () => {
     const empty = await mkdtemp(join(tmpdir(), 'obsidian-empty-'));
     try {
-      const text = textOf(await callTool(createServer(empty), 'list-notes', {}));
-      expect(text).toMatch(/No notes found/);
+      const response = await callTool(createServer(empty), 'list-notes', {});
+      expect(JSON.parse(textOf(response))).toMatchObject({ notes: [], count: 0 });
     } finally {
       await rm(empty, { recursive: true, force: true });
     }

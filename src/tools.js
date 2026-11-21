@@ -477,7 +477,7 @@ export async function deleteNote(vaultPath, notePath, { confirm } = {}) {
 /**
  * Search notes by tags (I/O function using pure functions)
  */
-export async function searchByTags(vaultPath, searchTags, directory = null, caseSensitive = false) {
+export async function searchByTags(vaultPath, searchTags, directory = null, caseSensitive = false, limit = 100, offset = 0) {
   // Validate directory path if provided
   if (directory) {
     const pathValidation = validatePathWithinBase(vaultPath, directory);
@@ -512,9 +512,12 @@ export async function searchByTags(vaultPath, searchTags, directory = null, case
     }
   }
   
+  const { items: page, pagination } = paginateArray(results, limit, offset);
+
   return {
-    notes: results,
-    count: results.length
+    notes: page,
+    count: page.length,
+    pagination
   };
 }
 
@@ -607,10 +610,12 @@ export async function getNoteMetadata(vaultPath, notePath, options = {}) {
  * @param {object} options - Discovery options
  * @param {string} options.mocName - Filter by specific MOC name (optional)
  * @param {string} options.directory - Limit search to specific directory (optional)
+ * @param {number} options.limit - Maximum MOCs to return (default 50)
+ * @param {number} options.offset - MOCs to skip (default 0)
  * @returns {Promise<object>} MOCs with their metadata and linked notes
  */
 export async function discoverMocs(vaultPath, options = {}) {
-  const { mocName, directory } = options;
+  const { mocName, directory, limit = 50, offset = 0 } = options;
 
   // Validate directory path if provided
   if (directory) {
@@ -696,9 +701,12 @@ export async function discoverMocs(vaultPath, options = {}) {
     moc.linkedMocs = linkedMocs;
   });
 
+  const { items: page, pagination } = paginateArray(mocs, limit, offset);
+
   return {
-    mocs: mocs,
-    count: mocs.length
+    mocs: page,
+    count: page.length,
+    pagination
   };
 }
 

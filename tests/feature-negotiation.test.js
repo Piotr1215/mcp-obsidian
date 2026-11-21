@@ -62,7 +62,8 @@ describe('optional feature negotiation for delete-note', () => {
 
       const result = await call(server, 'delete-note', { path: 'note.md' });
 
-      expect(result.content[0].text).toMatch(/deleted successfully/);
+      expect(result.structuredContent).toMatchObject({ deleted: true });
+      expect(result.isError).toBeFalsy();
       expect(existsSync(join(vault, 'note.md'))).toBe(false);
     });
 
@@ -88,7 +89,8 @@ describe('optional feature negotiation for delete-note', () => {
 
       const result = await call(server, 'delete-note', { path: 'note.md' });
 
-      expect(result.content[0].text).toMatch(/deleted successfully/);
+      expect(result.structuredContent).toMatchObject({ deleted: true });
+      expect(result.isError).toBeFalsy();
       expect(existsSync(join(vault, 'note.md'))).toBe(false);
     });
 
@@ -100,7 +102,8 @@ describe('optional feature negotiation for delete-note', () => {
       server.elicitInput = never;
 
       const result = await call(server, 'delete-note', { path: 'second.md' });
-      expect(result.content[0].text).toMatch(/deleted successfully/);
+      expect(result.structuredContent).toMatchObject({ deleted: true });
+      expect(result.isError).toBeFalsy();
     });
   });
 
@@ -115,7 +118,9 @@ describe('optional feature negotiation for delete-note', () => {
 
       const result = await call(server, 'delete-note', { path: 'note.md' });
 
-      expect(result.content[0].text).toMatch(/NOT deleted/);
+      expect(result.structuredContent).toMatchObject({ deleted: false });
+      expect(result.structuredContent.reason).toMatch(/did not confirm/);
+      expect(result.isError).toBe(true);
       expect(existsSync(join(vault, 'note.md'))).toBe(true);
     });
 
@@ -133,7 +138,8 @@ describe('optional feature negotiation for delete-note', () => {
 
       const result = await call(server, 'delete-note', { path: 'note.md' });
 
-      expect(result.content[0].text).toMatch(/deleted successfully/);
+      expect(result.structuredContent).toMatchObject({ deleted: true });
+      expect(result.isError).toBeFalsy();
       expect(existsSync(join(vault, 'note.md'))).toBe(false);
     });
   });
@@ -145,6 +151,7 @@ describe('optional feature negotiation for delete-note', () => {
 
     const result = await call(server, 'delete-note', { path: 'note.md' });
 
-    expect(result.content[0].text).toMatch(/deleted successfully/);
+    expect(result.structuredContent).toMatchObject({ deleted: true });
+      expect(result.isError).toBeFalsy();
   });
 });

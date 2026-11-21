@@ -176,6 +176,7 @@ Search for content across all notes in your vault.
 Search for notes by title: the first H1 (# Title), else a `title` property (YAML `title:` or Logseq `title::`), else the file name.
 - Fast title-based search
 - Case-sensitive/insensitive matching
+- Optional `limit` (default 100, max 500) and `offset` for paging
 - Returns title, file path, and line number (null for a file name title)
 - **Resource links**: Results include MCP resource links for direct note access
 - Optional path filtering
@@ -186,8 +187,11 @@ List all markdown files in your vault or a specific directory.
 - **Resource links**: Results include MCP resource links for direct note access
 - Supports directory filtering
 
+### Result format
+Every tool returns `structuredContent` matching its output schema, and the text block is exactly `JSON.stringify(structuredContent)`. Paged results carry `pagination.nextOffset` (null on the last page). Failures return `isError: true` with a message that ends in a next step; only an unknown tool or a malformed request is a JSON-RPC error. Read tools are annotated `readOnlyHint: true`.
+
 ### read-note
-Read the complete content of a specific note.
+Read the content of a specific note. Output is capped near 40,000 characters; a longer note comes back with `truncated: true` and a `nextOffset` to pass as the optional `offset` argument.
 - **Wikilink-style resolution**: Just provide the filename (e.g., `bitwarden-cli.md`) and the server finds it anywhere in the vault
 - Falls back to exact path if provided (e.g., `Notes/projects/bitwarden-cli.md`)
 - Reports ambiguity if multiple notes share the same filename
@@ -255,6 +259,7 @@ Get metadata for one or all notes without reading full content.
 - **Provides a high-level map** of your vault's organization
 - **10x faster navigation** - understand structure before searching
 - Filter by MOC name or directory
+- Optional `limit` (default 50, max 200) and `offset` for paging
 
 **Why use MOCs?**
 - **Context**: See what knowledge areas exist in your vault
