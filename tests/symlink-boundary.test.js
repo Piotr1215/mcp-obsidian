@@ -7,7 +7,7 @@ import { createServer } from '../src/server.js';
 /**
  * A symlink inside the vault must not lead the tools outside it. The path
  * check was lexical, so key.md -> ~/.ssh/id_rsa read the key, setup.md ->
- * ~/.bashrc appended to it, and a linked or dangling folder let notes be
+ * ~/.bashrc appended to or edited it, and a linked or dangling folder let notes be
  * written and deleted anywhere the server could reach. Links that stay inside
  * the vault, and a vault opened through a link, keep working.
  */
@@ -17,9 +17,6 @@ const callTool = (server, name, args) =>
     { method: 'tools/call', params: { name, arguments: args } },
     { signal: new AbortController().signal }
   );
-
-const textOf = (response) =>
-  response.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
 
 const exists = (p) => access(p).then(() => true, () => false);
 
@@ -62,6 +59,8 @@ describe.skipIf(process.platform === 'win32')('symlinks at the vault boundary', 
   it.each([
     ['read-note', { path: 'shared/key.md' }],
     ['append-note', { path: 'shared/setup.md', content: 'echo APPENDED' }],
+    ['edit-note', { path: 'shared/setup.md', oldText: '# shell rc', newText: 'echo EDITED' }],
+    ['edit-note', { path: 'shared/archive/victim.md', oldText: 'KEEP_ME', newText: 'EDITED' }],
     ['write-note', { path: 'shared/archive/planted.md', content: 'PLANTED' }],
     ['write-note', { path: 'shared/new.md', content: 'echo CREATED' }],
     ['write-note', { path: 'shared/gone/deep/note.md', content: 'CREATED' }],
@@ -70,7 +69,10 @@ describe.skipIf(process.platform === 'win32')('symlinks at the vault boundary', 
     ['search-vault', { query: 'SECRET', path: 'shared/archive' }],
     ['list-notes', { directory: 'shared/archive' }]
   ])('%s refuses %j', async (tool, args) => {
-    await expect(callTool(server, tool, args)).rejects.toMatchObject({ message: OUTSIDE });
+    const result = await callTool(server, tool, args);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain(OUTSIDE);
   });
 
   it('leaves every file outside the vault as it was', async () => {
@@ -94,19 +96,26 @@ describe.skipIf(process.platform === 'win32')('symlinks at the vault boundary', 
   });
 
   it('does not find a note linked from outside by its file name', async () => {
-    await expect(callTool(server, 'read-note', { path: 'key.md' }))
-      .rejects.toMatchObject({ message: 'Resource not found: key.md' });
+    const result = await callTool(server, 'read-note', { path: 'key.md' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Resource not found: key.md');
   });
 
   it('still reads a link that stays inside the vault', async () => {
-    expect(textOf(await callTool(server, 'read-note', { path: 'alias.md' }))).toBe('# Real\nIN_VAULT\n');
+    const result = await callTool(server, 'read-note', { path: 'alias.md' });
+
+    expect(result.structuredContent.content).toBe('# Real\nIN_VAULT\n');
   });
 
   it('still works when the vault itself is opened through a link', async () => {
     const linked = createServer(join(root, 'linked-vault'));
 
-    expect(textOf(await callTool(linked, 'read-note', { path: 'welcome.md' }))).toBe('# Welcome\n');
-    await callTool(linked, 'write-note', { path: 'new/folder/note.md', content: 'NEW' });
+    const read = await callTool(linked, 'read-note', { path: 'welcome.md' });
+    const write = await callTool(linked, 'write-note', { path: 'new/folder/note.md', content: 'NEW' });
+
+    expect(read.structuredContent.content).toBe('# Welcome\n');
+    expect(write.isError).toBeFalsy();
     expect(await readFile(join(vault, 'new', 'folder', 'note.md'), 'utf-8')).toBe('NEW');
   });
 });

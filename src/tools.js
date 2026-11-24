@@ -361,7 +361,7 @@ export async function editNote(vaultPath, notePath, oldText, newText) {
   const extensionValidation = validateMarkdownExtension(notePath);
   assertValid(extensionValidation, (msg) => Errors.invalidParams(msg, { path: notePath }));
 
-  const pathValidation = validatePathWithinBase(vaultPath, notePath);
+  const pathValidation = await validateVaultPath(vaultPath, notePath);
   assertValid(pathValidation, (msg) => Errors.accessDenied(msg, { path: notePath }));
 
   const fullPath = pathValidation.resolvedPath;
