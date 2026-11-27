@@ -5,7 +5,7 @@ import { discoverMocs } from '../src/tools.js';
 vi.mock('fs/promises');
 vi.mock('glob');
 
-import { readFile, stat } from 'fs/promises';
+import { readFile, stat, realpath } from 'fs/promises';
 import { glob } from 'glob';
 
 describe('MOC Discovery Tool', () => {
@@ -13,6 +13,7 @@ describe('MOC Discovery Tool', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    realpath.mockImplementation(async p => p); // the mocked disk has no symlinks
   });
 
   describe('discoverMocs', () => {

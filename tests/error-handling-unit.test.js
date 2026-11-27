@@ -88,6 +88,7 @@ describe('Error Handling Unit Tests', () => {
   describe('Tool error handling', () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      fs.realpath.mockImplementation(async p => p); // the mocked disk has no symlinks
     });
 
     it('should throw resource not found error for missing file', async () => {

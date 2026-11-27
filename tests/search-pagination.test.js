@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { searchVault } from '../src/tools.js';
 import { config } from '../src/config.js';
-import { readFile, stat } from 'fs/promises';
+import { readFile, stat, realpath } from 'fs/promises';
 import { glob } from 'glob';
 
 vi.mock('fs/promises');
@@ -12,6 +12,7 @@ describe('Search Pagination (FIRST Principles)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    realpath.mockImplementation(async p => p); // the mocked disk has no symlinks
   });
 
   describe('maxSearchResults limit (config.js)', () => {

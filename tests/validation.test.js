@@ -1,12 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import {
   validatePathWithinBase,
+  isPathInside,
   validateMarkdownExtension,
   validateRequiredParameters,
   validateFileSize,
   formatFileSize,
   sanitizeContent
 } from '../src/validation.js';
+
+describe('isPathInside', () => {
+  it.each([
+    ['/vault', '/vault', true],
+    ['/vault', '/vault/note.md', true],
+    ['/vault', '/vault/a/b/note.md', true],
+    ['/vault', '/vault/..notes.md', true],
+    ['/vault', '/', false],
+    ['/vault', '/vault-other/note.md', false],
+    ['/vault', '/home/me/.ssh/id_rsa', false]
+  ])('under %s, %s is inside: %s', (base, target, expected) => {
+    expect(isPathInside(base, target)).toBe(expected);
+  });
+});
 
 describe('Functional Validation Utilities', () => {
   describe('validatePathWithinBase', () => {

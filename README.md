@@ -298,7 +298,7 @@ This tool enables agents to understand your knowledge graph structure instantly,
 
 This server implements comprehensive security measures:
 
-- **Path Traversal Prevention**: All file paths are validated to prevent access outside the vault
+- **Path Traversal Prevention**: All file paths are validated to prevent access outside the vault. Symlinks are resolved first, so a link inside the vault cannot lead to a file outside it; links that stay inside the vault keep working
 - **Input Validation**: All inputs validated against JSON schemas
 - **File Size Limits**: Configurable limits prevent memory exhaustion (default: 10MB)
 - **Content Sanitization**: Removes potentially harmful null bytes

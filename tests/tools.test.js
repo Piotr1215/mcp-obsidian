@@ -6,7 +6,7 @@ vi.mock('fs/promises');
 // Keep glob's real escape(): readNote builds its fallback pattern with it.
 vi.mock('glob', async (importOriginal) => ({ ...(await importOriginal()), glob: vi.fn() }));
 
-import { readFile, writeFile, mkdir, unlink, access, stat } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink, access, stat, realpath } from 'fs/promises';
 import { glob } from 'glob';
 
 describe('Tools module', () => {
@@ -14,6 +14,7 @@ describe('Tools module', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    realpath.mockImplementation(async p => p); // the mocked disk has no symlinks
   });
 
   describe('searchVault', () => {
